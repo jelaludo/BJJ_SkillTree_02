@@ -1,13 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import dummyNodes from '../data/dummyNodes.json';
 import { getShapeLayout } from '../layout/shapeLayout';
 import { scoreToRadius } from '../shapes/moebius';
 
-const WIDTH = 600;
-const HEIGHT = 420;
+const BASE_WIDTH = 600;
+const BASE_HEIGHT = 420;
 const SHAPES = [
   { value: 'infinity', label: 'Infinity' },
   { value: 'infinity2', label: 'Infinity 2' },
+  { value: 'infinity3', label: 'Infinity 3' },
   { value: 'moebius', label: 'Moebius' },
 ];
 
@@ -16,13 +17,29 @@ function getRandomInt(min: number, max: number) {
 }
 
 export default function ShapeCanvas() {
-  const [shape, setShape] = useState<'infinity' | 'infinity2' | 'moebius'>('infinity');
+  const [shape, setShape] = useState<'infinity' | 'infinity2' | 'infinity3' | 'moebius'>('infinity');
   const [nodeCount, setNodeCount] = useState(48);
   const [nodeSpace, setNodeSpace] = useState(1.0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: BASE_WIDTH, height: BASE_HEIGHT });
+
+  // Responsive container size
+  useEffect(() => {
+    function updateSize() {
+      if (containerRef.current) {
+        setContainerSize({
+          width: containerRef.current.offsetWidth,
+          height: containerRef.current.offsetHeight,
+        });
+      }
+    }
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   // Dynamically generate nodes based on nodeCount
   const baseNodes = useMemo(() => {
-    // Use the first N dummy nodes, or repeat if not enough
     const arr = [];
     for (let i = 0; i < nodeCount; i++) {
       const src = dummyNodes[i % dummyNodes.length];
@@ -53,7 +70,7 @@ export default function ShapeCanvas() {
   // Custom layout for multi-layered infinity
   const nodePositions = useMemo(() => {
     if (shape === 'infinity') {
-      const { width, height } = { width: WIDTH, height: HEIGHT };
+      const { width, height } = containerSize;
       const cx = width / 2;
       const cy = height / 2;
       const A = Math.min(width, height) * 0.42;
@@ -75,16 +92,36 @@ export default function ShapeCanvas() {
         };
       });
     } else if (shape === 'infinity2') {
-      // Use grid-like infinity2 layout
-      return getShapeLayout('infinity2', baseNodes, { width: WIDTH, height: HEIGHT, nodeSpace });
+      return getShapeLayout('infinity2', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'infinity3') {
+      return getShapeLayout('infinity3', baseNodes, { ...containerSize, nodeSpace });
     } else {
-      // Use the default moebius layout
-      return getShapeLayout('moebius', baseNodes, { width: WIDTH, height: HEIGHT, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
+      return getShapeLayout('moebius', baseNodes, { ...containerSize, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
     }
-  }, [shape, layeredNodes, baseNodes, nodeSpace]);
+  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize]);
+
+  // Calculate bounding box for all nodes to set viewBox
+  const bounds = useMemo(() => {
+    if (nodePositions.length === 0) return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of nodePositions) {
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x);
+      maxY = Math.max(maxY, node.y);
+    }
+    // Add padding
+    const pad = 50;
+    return {
+      minX: minX - pad,
+      minY: minY - pad,
+      maxX: maxX + pad,
+      maxY: maxY + pad,
+    };
+  }, [nodePositions]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', position: 'relative' }}>
+    <div ref={containerRef} style={{ width: '100vw', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       {/* Controls top right */}
       <div style={{ position: 'absolute', top: 24, right: 32, background: 'rgba(24,30,34,0.92)', padding: 16, borderRadius: 10, boxShadow: '0 2px 12px #0002', zIndex: 10 }}>
         <div style={{ marginBottom: 10 }}>
@@ -121,20 +158,25 @@ export default function ShapeCanvas() {
         <select
           id="shape-select"
           value={shape}
-          onChange={e => setShape(e.target.value as 'infinity' | 'infinity2' | 'moebius')}
+          onChange={e => setShape(e.target.value as 'infinity' | 'infinity2' | 'infinity3' | 'moebius')}
           style={{ fontSize: 16, padding: '4px 8px', borderRadius: 4 }}
         >
           {SHAPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
       <h1 style={{ textAlign: 'center', marginBottom: 12 }}>BJJ Skill Tree</h1>
-      <svg width={WIDTH} height={HEIGHT} style={{ background: 'none', display: 'block' }}>
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`${bounds.minX} ${bounds.minY} ${bounds.maxX - bounds.minX} ${bounds.maxY - bounds.minY}`}
+        style={{ background: 'none', display: 'block', maxWidth: '100vw', maxHeight: '100vh' }}
+      >
         {/* Subtle shading ellipse for 3D feel */}
         <ellipse
-          cx={WIDTH / 2}
-          cy={HEIGHT / 2}
-          rx={WIDTH * 0.38}
-          ry={HEIGHT * 0.28}
+          cx={(bounds.minX + bounds.maxX) / 2}
+          cy={(bounds.minY + bounds.maxY) / 2}
+          rx={(bounds.maxX - bounds.minX) * 0.38}
+          ry={(bounds.maxY - bounds.minY) * 0.28}
           fill="url(#moebiusShade)"
           opacity="0.22"
         />
@@ -145,24 +187,24 @@ export default function ShapeCanvas() {
           </radialGradient>
         </defs>
         {/* Connect nodes with lines to form the loop or grid */}
-        {shape === 'infinity2'
+        {shape === 'infinity2' || shape === 'infinity3'
           ? (() => {
-              // Draw grid connections only once per pair
               const lines = [];
               const seen = new Set();
               for (const node of nodePositions) {
-                if (!node.neighbors) continue;
-                for (const neighborId of node.neighbors) {
-                  const key = [node.id, neighborId].sort().join('-');
+                const n = node as any;
+                if (!n.neighbors) continue;
+                for (const neighborId of n.neighbors) {
+                  const key = [n.id, neighborId].sort().join('-');
                   if (seen.has(key)) continue;
                   seen.add(key);
-                  const neighbor = nodePositions.find(n => n.id === neighborId);
+                  const neighbor = nodePositions.find(nn => nn.id === neighborId);
                   if (!neighbor) continue;
                   lines.push(
                     <line
                       key={key}
-                      x1={node.x}
-                      y1={node.y}
+                      x1={n.x}
+                      y1={n.y}
                       x2={neighbor.x}
                       y2={neighbor.y}
                       stroke="#ffb347"

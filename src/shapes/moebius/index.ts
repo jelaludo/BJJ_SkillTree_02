@@ -121,4 +121,61 @@ export function generateInfinity2Layout(nodes: SkillNode[], params: ShapeParams 
   }
 
   return [...innerLayer, ...outerLayer];
+}
+
+// Infinity 3: three concentric layers of nodes along the infinity symbol, each connected to its neighbors and corresponding nodes in adjacent layers
+export function generateInfinity3Layout(nodes: SkillNode[], params: ShapeParams & { nodeSpace?: number }) {
+  const { width, height, nodeSpace = 1.0 } = params;
+  const cx = width / 2;
+  const cy = height / 2;
+  const A = Math.min(width, height) * 0.48;
+  const B = Math.min(width, height) * 0.19;
+
+  // Split nodes evenly between three layers
+  const n = Math.floor(nodes.length / 3);
+  const layer1 = nodes.slice(0, n);
+  const layer2 = nodes.slice(n, 2 * n);
+  const layer3 = nodes.slice(2 * n, 3 * n);
+  const total = Math.min(layer1.length, layer2.length, layer3.length);
+
+  const offsets = [0, nodeSpace * 1.1, nodeSpace * 2.2];
+  const layers = [layer1, layer2, layer3].map((layer, li) =>
+    layer.map((node, i) => {
+      const t = (i / total) * 2 * Math.PI;
+      const offset = offsets[li];
+      const x = cx + (A + offset * 90) * Math.cos(t);
+      const y = cy + (B + offset * 60) * Math.sin(2 * t) / 1.2;
+      return {
+        ...node,
+        x,
+        y,
+        brightness: scoreToBrightness(node.score),
+        layer: li,
+        pairIdx: i,
+        neighbors: [] as string[],
+      } as any;
+    })
+  );
+
+  // Connect each node to its next in the same layer (loop), and to its pair in adjacent layers
+  for (let i = 0; i < total; i++) {
+    // Layer 1
+    layers[0][i].neighbors = [
+      layers[0][(i + 1) % total].id,
+      layers[1][i].id,
+    ];
+    // Layer 2
+    layers[1][i].neighbors = [
+      layers[1][(i + 1) % total].id,
+      layers[0][i].id,
+      layers[2][i].id,
+    ];
+    // Layer 3
+    layers[2][i].neighbors = [
+      layers[2][(i + 1) % total].id,
+      layers[1][i].id,
+    ];
+  }
+
+  return [...layers[0], ...layers[1], ...layers[2]];
 } 
