@@ -1,0 +1,174 @@
+Category,Skill
+Fundamentals,Technical Stand Up
+Fundamentals,Bridge - Upa
+Fundamentals,Forward Roll
+Fundamentals,Backward Roll
+Fundamentals,Granby Roll
+Fundamentals,Sit-Out
+Fundamentals,Switch
+Fundamentals,Hip Lift
+Fundamentals,Fulcrum & Lever
+Fundamentals,Removing Slack
+Fundamentals,Framing
+Fundamentals,Base
+Fundamentals,Shrimp
+Fundamentals,Back Step
+Fundamentals,Inversion
+Fundamentals,Shoulder escapes
+Fundamentals,Windshield Wipers
+Fundamentals,Wedges
+Fundamentals,Loops
+Fundamentals,Armpit grip
+Fundamentals,Wet Dog / Vibrate
+Fundamentals,Posts removal/recovery
+Fundamentals,Stapling
+Fundamentals,Stiff arm
+Fundamentals,Falling weight
+Fundamentals,Kaina wo kaesu
+Fundamentals,Switch base
+Fundamentals,One-limb-two-points
+Fundamentals,Kipping
+Fundamentals,Head disruption
+Fundamentals,End of levers control
+Fundamentals,Small muscles to hold
+Fundamentals,Pendulum
+Fundamentals,Unweighted legs
+Fundamentals,Level changes
+Fundamentals,One-limb-two-points
+Fundamentals,Elbow under frame
+Fundamentals,Moving within frames
+Fundamentals,Hand Stickiness
+Fundamentals,Leg Stickiness
+Fundamentals,Live Toes/Hooks
+Fundamentals,Eliminate/Create Slack
+Fundamentals,Posture / alignment
+Fundamentals,Pressure (apply, accept, release)
+Fundamentals,Loading their weight
+Fundamentals,Loading your weight
+Fundamentals,Overlapping pressures
+Fundamentals,Disconnecting
+Fundamentals,Head usage (drive/post/lead)
+Fundamentals,Grips (types, sequences)
+Fundamentals,Form Tension - 掤
+Fundamentals,Hips engagement (one, both, switch)
+Fundamentals,Centerline
+Fundamentals,Shearing Forces
+Fundamentals,Pression
+Fundamentals,Compression
+Fundamentals,Torsion
+Physical,Balance
+Physical,Single Leg Balance
+Physical,CoG Awareness
+Physical,Flexibility
+Physical,Strength
+Physical,Grip Strength
+Physical,Glute Activation
+Physical,Speed
+Physical,Cardio
+Physical,Explosiveness
+Physical,Fluid Momentum
+Physical,Agility
+Physical,Coordination
+Physical,Mobility
+Physical,Reaction Time
+Physical,Body Composition
+Physical,Injuries
+Mental,Positional Hierarchy
+Mental,Timing / Triggers
+Mental,Main-Problem Identification
+Mental,Precision
+Mental,Bail out
+Mental,Chaining Threats
+Mental,Hiding Intent
+Mental,Varying Intensity
+Mental,Identify Wedges
+Mental,Identify snug carotid fit
+Mental,Identify snug entanglements
+Mental,Hand-Feet coordination
+Mental,Controlled breathing
+Mental,Finding angles
+Mental,Calm under pressure
+Mental,Bait / predictable reactions
+Mental,Learn & adapt
+Mental,Strategy, gameplan
+Mental,Breaking their will
+Mental,Dictating tempo
+Mental,Offensive defense
+Mental,Endgame - no fear
+Mental,One-limb-two-points
+Mental,Isolate Limbs
+Mental,Hip block
+Mental,Energy conservation
+Mental,Models of Jiu Jitsu : 4 Steps
+Mental,Models of Jiu Jitsu : Flow Pressure Finish
+Mental,R&D Mindset
+Techniques,Takedowns
+Techniques,Positional Pins
+Techniques,Guards
+Techniques,Guard Passes
+Techniques,Sweeps
+Techniques,Escapes
+Techniques,Neck Submissions
+Techniques,Arms Submissions
+Techniques,Leg Submissions
+Techniques,Lapel Submissions
+Practice,Deliberate practice
+Practice,Hierarchy of violence
+Practice,Sparring
+Practice,CLA
+Practice,Injury Prevention
+Practice,Goal Oriented
+Practice,Research
+Practice,Playfulness
+Practice,Exploration
+Practice,Skill Acquisition Models
+Practice,OODA
+Practice,Bloom's Taxonomy
+Practice,Shu-Ha-Ri 守破離
+Practice,Controlled Movements
+Practice,Controlled Submissions
+Practice,Modular Intensity
+Practice,Depth of Knowledge
+Practice,Controlled Ego
+Practice,Friendly Attitude
+Practice,Feedback Receptivity
+Practice,Recovery Awareness
+Practice,Weakness Identification
+Practice,Personal Hygiene
+Practice,Nail Care
+Practice,Equipment Hygiene
+Practice,Dental Hygiene
+Internal,Rooting/Grounding
+Internal,Centered/Tanden
+Internal,Whole-Body Unity
+Internal,Relaxed Power
+Internal,Intent/Mind
+Internal,Listening Energy
+Internal,Neutralizing Force
+Internal,Adhering Energy
+Internal,Yielding
+Internal,Empty Force
+Internal,Internal Strength
+Internal,Structural Power
+Internal,Spiraling Energy
+Internal,Sensitivity
+Internal,Opposing Forces
+Internal,Fascia development
+Internal,Proprioception
+Internal,Interoception
+Internal,Neuromuscular Precision
+Internal,Differential Relaxation
+Internal,Fascial Connectivity
+Internal,Peng Jin
+Internal,Joint Alignment
+Internal,Structural Disruption
+Internal,Peng (掤)
+Internal,Lu (履)
+Internal,Ji (擠)
+Internal,An (按)
+Internal,Cai (採)
+Internal,Lie (列)
+Internal,Zhou (肘)
+Internal,Kao (靠)
+Internal,胸細分化
+Internal,Bouncing

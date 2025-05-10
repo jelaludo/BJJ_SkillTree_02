@@ -1,0 +1,109 @@
+# 🎨 Visuals Plan – BJJ Skill Tree Shapes
+
+This file documents the strategy to generate distinct, stylized node-based visuals for each skill category. Each shape hosts nodes scored 1–10, with brightness reflecting level.
+
+---
+
+## 🧠 Categories & Visual Shape Mapping
+
+| Category     | Shape               | Description                                  |
+| ------------ | ------------------- | -------------------------------------------- |
+| Fundamentals | Moebius Strip       | Continuous learning loop, infinity structure |
+| Physical     | Muscle (Flexed Arm) | Strength and tension, anatomical contour     |
+| Mental       | Brain               | Cognitive complexity, hemispheric structure  |
+| Techniques   | Maze/Decision Tree  | Path-dependent, branching logic              |
+| Practice     | Fist Bump           | Symmetry, repetition, dual effort            |
+| Internal     | Mycelium Frame      | Organic, networked, internal growth          |
+
+---
+
+## 🔷 Shape Rendering Approach
+
+### 1. **Moebius Strip – Fundamentals**
+
+* **Type**: Parametric curve (2D projection)
+* **Placement**: Nodes along looped edge & central spine
+* **Method**: Formula-driven
+
+```ts
+x = (1 + (w/2) * cos(t/2)) * cos(t)
+y = (1 + (w/2) * cos(t/2)) * sin(t)
+```
+
+### 2. **Flexed Arm – Physical**
+
+* **Type**: SVG outline of flexed arm
+* **Placement**: Random fill inside path with collision check
+* **Method**: SVG path loader + `d3.polygonContains`
+
+### 3. **Brain – Mental**
+
+* **Type**: Bézier or SVG brain outline
+* **Placement**: Along lobes and internal ridges
+* **Method**: `path.getPointAtLength()` + layering curves
+
+### 4. **Maze – Techniques**
+
+* **Type**: Grid/tree structure
+* **Placement**: Parent → children, vertically nested
+* **Method**: Recursive layout logic, expand-on-click
+
+### 5. **Fist Bump – Practice**
+
+* **Type**: Two mirrored SVG fists
+* **Placement**: Symmetric left/right
+* **Method**: SVG trace split down center, reflect X coords
+
+### 6. **Mycelium Frame – Internal**
+
+* **Type**: Organic noise + triangulation
+* **Placement**: Random fill, organic shape
+* **Method**: Perlin noise + Voronoi mesh
+
+---
+
+## ✨ Brightness Scaling Logic
+
+Each node uses a visual cue for skill score (1–10):
+
+```css
+opacity = 0.2 + (0.08 * score)
+fill = hsl(30, 80%, calc(30% + score * 5%))
+```
+
+---
+
+## 🔧 Layout Engine Stub
+
+Each shape implements:
+
+```ts
+function generateLayout(nodes: SkillNode[], shapeParams: ShapeParams): NodePosition[]
+```
+
+Used by a shared `shapeLayout.ts` engine per category.
+
+---
+
+## 📁 Folder Structure
+
+```
+/src/visuals
+  /moebius
+  /muscle
+  /brain
+  /maze
+  /fist
+  /mycelium
+  shapeLayout.ts
+```
+
+Each folder contains shape logic + optional SVG assets + test sample.
+
+---
+
+## 📌 Goal
+
+* Make each shape symbolic and mathematically repeatable
+* Allow live rendering and editing without art-tool dependency
+* Keep node positioning within shape bounds dynamically linked to data

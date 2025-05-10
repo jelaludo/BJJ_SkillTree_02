@@ -1,0 +1,160 @@
+# 🧠 Implementation Plan – BJJ Skill Tree App (v1)
+
+## 🎯 Working Goal
+
+> Create a responsive web app that visualizes BJJ skill development via a symbolic skill tree. Six categories are mapped to distinct shapes, each containing skill nodes. Nodes vary in brightness based on a 1–10 score and support interaction (hover, click). Admins can build, edit, and save archetype trees.
+
+---
+
+## 📦 Modules Overview
+
+### 1. **Core Visualization Engine**
+
+* Renders each skill category inside a unique shape:
+
+  * Fundamentals → Moebius Strip
+  * Physical → Muscle
+  * Mental → Brain
+  * Techniques → Maze/Decision Tree
+  * Practice → Fist Bump
+  * Internal → Mycelium Frame
+* Node placement constrained to shape boundaries
+* Brightness = score 1–10
+* Zoom + pan + category-level expansion
+* Hover → node label
+* Click → card with skill info (score, notes, etc.)
+
+### 2. **Admin Interface**
+
+* CRUD operations:
+
+  * Add/remove nodes
+  * Assign values (1–10)
+  * Attach descriptions & metadata
+* Upload initial `.md` or `.txt` skill lists
+* Archetype manager:
+
+  * Create & save archetypes (localStorage or file)
+  * Load/view/edit existing ones
+
+### 3. **Data Model & Persistence**
+
+* Local JSON model (per archetype)
+* Node:
+
+  * `id`, `name`, `score`, `description`, `category`, `position`, `parent`, `subnodes[]`
+* JSON import/export system
+* Default set of archetypes shipped with app (pre-modeled)
+
+### 4. **UI Framework**
+
+* Responsive layout (mobile-ready but web-first)
+* React UI: Tabs (categories), Sidebar (node info), Canvas (tree)
+* Light/dark mode, color-contrast tuning
+* Minimalist, Zen-like styling
+
+### 5. **Layout Engine**
+
+* Custom node layout generator per shape
+* Hooks into geometry formulas (e.g. Moebius) to determine positions
+* Greys out subnodes until parent node clicked
+* Ensures consistent node spacing & symmetry
+
+### 6. **Interaction Layer**
+
+* Mouse hover, click events
+* Tooltip overlay (hover)
+* Modal/card system (click)
+* Node selection & highlight
+* Zoom & pan (category canvas)
+
+### 7. **Debugging & Logging**
+
+* Console logging wrapper (toggle debug mode)
+* Event tracing (click, data mutation)
+* Node validation checker
+
+---
+
+## 🗺️ Layout Wireframe (Text Version)
+
+```
++------------------------------------------------+
+| [ Tabs: Fundamentals | Techniques | Internal ]  |
++-------------------+----------------------------+
+|                   |                            |
+|  [ Node Details ] |   [ Shape Canvas Render ]   |
+|  - Name           |   - Moebius Strip (SVG)     |
+|  - Description    |   - Nodes plotted           |
+|  - Score: 1–10    |   - Hover/click logic       |
+|                   |                            |
++-------------------+----------------------------+
+| [ Admin Panel: Add Node | Load Archetype ]      |
++------------------------------------------------+
+```
+
+---
+
+## 🧰 Recommended Stack
+
+* **Frontend**: React + D3.js + SVG/CSS
+* **State**: Zustand or Redux Toolkit
+* **Styling**: TailwindCSS or Chakra UI
+* **Persistence**: localStorage + JSON I/O
+* **Build Tools**: Vite or CRA
+
+---
+
+## 🔐 Security
+
+* Admin tools only accessible via local flag
+* File imports validated for schema
+
+---
+
+## 🧪 Testing Plan
+
+* Behavior-driven test cases (simulate node add/edit/delete)
+* Layout regression (shape integrity)
+* Zoom/pan stress tests
+
+---
+
+## 🔍 Debugging Strategy
+
+* Enable `debug=true` flag in localStorage
+* Console log node structures pre/post render
+* Visual validator mode: shows malformed nodes (overlaps, wrong shape)
+
+---
+
+## 📁 File Structure (Simplified)
+
+```
+/src
+  /components
+    - NodeCard.tsx
+    - SkillCanvas.tsx
+    - AdminPanel.tsx
+  /data
+    - archetypes.json
+    - default_skills.md
+  /hooks
+    - useSkillTree.ts
+  /lib
+    - shapeLayout.ts
+    - utils.ts
+  /styles
+    - index.css
+```
+
+---
+
+## 🏁 MVP Exit Criteria
+
+* All six categories load with 5+ sample nodes
+* Shapes render nodes correctly
+* Hover & click interactions work
+* Admin can add/remove node, save/load tree
+* JSON archetype export/import
+* Visual fidelity on desktop and mobile
