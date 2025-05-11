@@ -40,6 +40,18 @@ const SHAPES = [
   { value: 'chikara', label: 'Chikara (力)' },
 ];
 
+const CONNECTION_TYPES = [
+  { value: 'chain', label: 'A) Chain' },
+  { value: 'linearBus', label: 'B) Linear Bus' },
+  { value: 'tree', label: 'C) Tree' },
+  { value: 'ring', label: 'D) Ring' },
+  { value: 'hubSpoke', label: 'E) Hub-and-spoke' },
+  { value: 'fullyConnected', label: 'F) Fully Connected' },
+  { value: 'partialMesh', label: 'G) Partial Mesh' },
+  { value: 'incomplete', label: 'H) Multiple Incomplete Networks' },
+  { value: 'none', label: 'I) No Connections' },
+];
+
 function getRandomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -57,6 +69,91 @@ function getSafeArea(width: number, height: number) {
   };
 }
 
+// Connection logic for all 9 types
+function applyConnections(nodes: NodePosition[], type: string): NodePosition[] {
+  const n = nodes.length;
+  if (n === 0) return nodes;
+  let newNodes = nodes.map(node => ({ ...node, neighbors: [] as string[] }));
+  switch (type) {
+    case 'chain':
+      for (let i = 0; i < n; i++) {
+        if (i > 0) newNodes[i].neighbors!.push(newNodes[i - 1].id);
+        if (i < n - 1) newNodes[i].neighbors!.push(newNodes[i + 1].id);
+      }
+      break;
+    case 'linearBus':
+      for (let i = 0; i < n; i++) {
+        if (i > 0) newNodes[i].neighbors!.push(newNodes[i - 1].id);
+        if (i < n - 1) newNodes[i].neighbors!.push(newNodes[i + 1].id);
+        // Add a branch every 3rd node
+        if (i % 3 === 0 && i + 3 < n) newNodes[i].neighbors!.push(newNodes[i + 3].id);
+      }
+      break;
+    case 'tree': {
+      // Simple binary tree
+      for (let i = 0; i < n; i++) {
+        const left = 2 * i + 1;
+        const right = 2 * i + 2;
+        if (left < n) newNodes[i].neighbors!.push(newNodes[left].id);
+        if (right < n) newNodes[i].neighbors!.push(newNodes[right].id);
+        if (i > 0) newNodes[i].neighbors!.push(newNodes[Math.floor((i - 1) / 2)].id);
+      }
+      break;
+    }
+    case 'ring':
+      for (let i = 0; i < n; i++) {
+        newNodes[i].neighbors!.push(newNodes[(i + 1) % n].id);
+        newNodes[i].neighbors!.push(newNodes[(i - 1 + n) % n].id);
+      }
+      break;
+    case 'hubSpoke':
+      // First node is hub
+      for (let i = 1; i < n; i++) {
+        newNodes[0].neighbors!.push(newNodes[i].id);
+        newNodes[i].neighbors!.push(newNodes[0].id);
+      }
+      break;
+    case 'fullyConnected':
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (i !== j) newNodes[i].neighbors!.push(newNodes[j].id);
+        }
+      }
+      break;
+    case 'partialMesh':
+      for (let i = 0; i < n; i++) {
+        const neighbors = new Set<string>();
+        while (neighbors.size < Math.min(3, n - 1)) {
+          const j = Math.floor(Math.random() * n);
+          if (j !== i) neighbors.add(newNodes[j].id);
+        }
+        newNodes[i].neighbors = Array.from(neighbors);
+      }
+      break;
+    case 'incomplete': {
+      // Split into 3 clusters
+      const clusters = 3;
+      const perCluster = Math.ceil(n / clusters);
+      for (let c = 0; c < clusters; c++) {
+        const start = c * perCluster;
+        const end = Math.min((c + 1) * perCluster, n);
+        for (let i = start; i < end; i++) {
+          for (let j = start; j < end; j++) {
+            if (i !== j) newNodes[i].neighbors!.push(newNodes[j].id);
+          }
+        }
+      }
+      break;
+    }
+    case 'none':
+      // No connections
+      break;
+    default:
+      break;
+  }
+  return newNodes;
+}
+
 export default function ShapeCanvas() {
   const [shape, setShape] = useState<'infinity' | 'infinity2' | 'infinity3' | 'moebius' | 'brain' | 'brain2' | 'brain3' | 'brain4svg' | 'brainsvg2' | 'fist1' | 'fist' | 'brainTest' | 'brainTest2' | 'muscleTest' | 'muscleTest90x63' | 'muscleTest90x63Fill' | 'topDownBrain' | 'topDownBrain2' | 'chikara'>('infinity');
   const [nodeCount, setNodeCount] = useState(60);
@@ -69,6 +166,7 @@ export default function ShapeCanvas() {
   const [containerSize, setContainerSize] = useState({ width: BASE_WIDTH, height: BASE_HEIGHT });
   const navigate = useNavigate();
   const [maxInsideConnections, setMaxInsideConnections] = useState(1); // New state for inside node connections
+  const [connectionType, setConnectionType] = useState('chain');
 
   // Responsive container size
   useEffect(() => {
@@ -116,6 +214,7 @@ export default function ShapeCanvas() {
 
   // Custom layout for multi-layered infinity
   const nodePositions = useMemo(() => {
+    let positions: NodePosition[];
     if (shape === 'infinity') {
       const { width, height } = containerSize;
       const cx = width / 2;
@@ -123,7 +222,7 @@ export default function ShapeCanvas() {
       const A = Math.min(width, height) * 0.42;
       const B = Math.min(width, height) * 0.19;
       const n = baseNodes.length;
-      return layeredNodes.map((node: any, idx: number) => {
+      positions = layeredNodes.map((node: any, idx: number) => {
         const i = idx % n;
         const t = (i / n) * 2 * Math.PI;
         const offset = node._offset || 0;
@@ -141,43 +240,45 @@ export default function ShapeCanvas() {
         };
       });
     } else if (shape === 'infinity2') {
-      return getShapeLayout('infinity2', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('infinity2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'infinity3') {
-      return getShapeLayout('infinity3', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('infinity3', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brain') {
-      return getShapeLayout('brain', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brain', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brain2') {
-      return getShapeLayout('brain2', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brain2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brain3') {
-      return getShapeLayout('brain3', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brain3', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brain4svg') {
-      return getShapeLayout('brain4svg', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brain4svg', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brainsvg2') {
-      return getShapeLayout('brainsvg2', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brainsvg2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'fist1') {
-      return getShapeLayout('fist1', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('fist1', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'fist') {
-      return getShapeLayout('fist', baseNodes, { ...containerSize, nodeSpace, maxInsideConnections });
+      positions = getShapeLayout('fist', baseNodes, { ...containerSize, nodeSpace, maxInsideConnections });
     } else if (shape === 'brainTest') {
-      return getShapeLayout('brainTest', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brainTest', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brainTest2') {
-      return getShapeLayout('brainTest2', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('brainTest2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'muscleTest') {
-      return getShapeLayout('muscleTest', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('muscleTest', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'muscleTest90x63') {
-      return getShapeLayout('muscleTest90x63', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('muscleTest90x63', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'muscleTest90x63Fill') {
-      return getShapeLayout('muscleTest90x63Fill', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('muscleTest90x63Fill', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'topDownBrain') {
-      return getShapeLayout('topDownBrain', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('topDownBrain', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'topDownBrain2') {
-      return getShapeLayout('topDownBrain2', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('topDownBrain2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'chikara') {
-      return getShapeLayout('chikara', baseNodes, { ...containerSize, nodeSpace });
+      positions = getShapeLayout('chikara', baseNodes, { ...containerSize, nodeSpace });
     } else {
-      return getShapeLayout('moebius', baseNodes, { ...containerSize, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
+      positions = getShapeLayout('moebius', baseNodes, { ...containerSize, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
     }
-  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, nodeBrightVar, maxInsideConnections]);
+    // Apply connection logic
+    return applyConnections(positions, connectionType);
+  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, nodeBrightVar, maxInsideConnections, connectionType]);
 
   // Outline paths for the brain3 shape (semicircle + triangle, always in sync with node region)
   const brain3Outlines = useMemo(() => {
@@ -459,6 +560,17 @@ export default function ShapeCanvas() {
             style={{ verticalAlign: 'middle' }}
           />
         </div>
+        <div style={{ marginBottom: 10 }}>
+          <label htmlFor="connection-type" style={{ fontWeight: 600, marginRight: 8 }}>Connection Type:</label>
+          <select
+            id="connection-type"
+            value={connectionType}
+            onChange={e => setConnectionType(e.target.value)}
+            style={{ fontSize: 15, padding: '4px 8px', borderRadius: 4 }}
+          >
+            {CONNECTION_TYPES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+        </div>
       </div>
       {/* Shape selector */}
       <div style={{ marginBottom: 16 }}>
@@ -603,13 +715,13 @@ export default function ShapeCanvas() {
                 const lines = [];
                 const seen = new Set();
                 for (const node of nodePositions) {
-                  if (!('neighbors' in node) || !Array.isArray((node as any).neighbors)) continue;
+                  if (!node.neighbors) continue;
                   for (const neighborId of node.neighbors) {
                     const key = [node.id, neighborId].sort().join('-');
                     if (seen.has(key)) continue;
                     seen.add(key);
                     const neighbor = nodePositions.find(nn => nn.id === neighborId);
-                    if (!neighbor || !('neighbors' in neighbor) || !Array.isArray((neighbor as any).neighbors)) continue;
+                    if (!neighbor || !neighbor.neighbors) continue;
                     // Determine connection type
                     const isOutline = node.size === 8 && neighbor.size === 8;
                     const isHubLine = (hubIds.has(node.id) && !hubIds.has(neighborId)) || (!hubIds.has(node.id) && hubIds.has(neighborId));
