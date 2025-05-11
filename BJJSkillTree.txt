@@ -77,6 +77,8 @@ Mental,Positional Hierarchy
 Mental,Timing / Triggers
 Mental,Main-Problem Identification
 Mental,Precision
+Mental,Recall Ability
+Mental,Mindful Rolling
 Mental,Bail out
 Mental,Chaining Threats
 Mental,Hiding Intent
@@ -99,6 +101,8 @@ Mental,One-limb-two-points
 Mental,Isolate Limbs
 Mental,Hip block
 Mental,Energy conservation
+Mental,Problem-Solve Solo
+Mental,Take Ownership of Training
 Mental,Models of Jiu Jitsu : 4 Steps
 Mental,Models of Jiu Jitsu : Flow Pressure Finish
 Mental,R&D Mindset

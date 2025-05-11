@@ -1,8 +1,20 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import dummyNodes from '../data/dummyNodes.json';
 import { getShapeLayout } from '../layout/shapeLayout';
 import { scoreToRadius } from '../shapes/moebius';
-import { getBrain3RegionParams, getBrain3OutlinePoints } from '../shapes/brain';
+import { getBrain3RegionParams, getBrain3OutlinePoints, getBrain4PolygonOutlinePoints } from '../shapes/brain';
+
+// Add NodePosition interface
+interface NodePosition {
+  id: string;
+  x: number;
+  y: number;
+  brightness?: number;
+  score?: number;
+  size?: number;
+  neighbors?: string[];
+}
 
 const BASE_WIDTH = 600;
 const BASE_HEIGHT = 420;
@@ -14,6 +26,18 @@ const SHAPES = [
   { value: 'brain', label: 'Brain' },
   { value: 'brain2', label: 'Brain 2' },
   { value: 'brain3', label: 'Brain 3' },
+  { value: 'brain4svg', label: 'Brain 4 SVG' },
+  { value: 'brainsvg2', label: 'Brain SVG 2' },
+  { value: 'fist1', label: 'Fist 1' },
+  { value: 'fist', label: 'Fist' },
+  { value: 'brainTest', label: 'Brain Test' },
+  { value: 'brainTest2', label: 'Brain Test 2' },
+  { value: 'muscleTest', label: 'Muscle Test' },
+  { value: 'muscleTest90x63', label: '90x63 Muscle' },
+  { value: 'muscleTest90x63Fill', label: '90x63 Muscle (Fill Interior)' },
+  { value: 'topDownBrain', label: 'Top Down Brain' },
+  { value: 'topDownBrain2', label: 'Top Down Brain 2' },
+  { value: 'chikara', label: 'Chikara (力)' },
 ];
 
 function getRandomInt(min: number, max: number) {
@@ -34,14 +58,17 @@ function getSafeArea(width: number, height: number) {
 }
 
 export default function ShapeCanvas() {
-  const [shape, setShape] = useState<'infinity' | 'infinity2' | 'infinity3' | 'moebius' | 'brain' | 'brain2' | 'brain3'>('infinity');
+  const [shape, setShape] = useState<'infinity' | 'infinity2' | 'infinity3' | 'moebius' | 'brain' | 'brain2' | 'brain3' | 'brain4svg' | 'brainsvg2' | 'fist1' | 'fist' | 'brainTest' | 'brainTest2' | 'muscleTest' | 'muscleTest90x63' | 'muscleTest90x63Fill' | 'topDownBrain' | 'topDownBrain2' | 'chikara'>('infinity');
   const [nodeCount, setNodeCount] = useState(60);
   const [nodeSizeVar, setNodeSizeVar] = useState(5); // 1-10
   const [nodeBrightVar, setNodeBrightVar] = useState(5); // 1-10
   const [nodeSpace, setNodeSpace] = useState(1.0);
   const [showOutline, setShowOutline] = useState(false);
+  const [showEdges, setShowEdges] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: BASE_WIDTH, height: BASE_HEIGHT });
+  const navigate = useNavigate();
+  const [maxInsideConnections, setMaxInsideConnections] = useState(1); // New state for inside node connections
 
   // Responsive container size
   useEffect(() => {
@@ -123,23 +150,54 @@ export default function ShapeCanvas() {
       return getShapeLayout('brain2', baseNodes, { ...containerSize, nodeSpace });
     } else if (shape === 'brain3') {
       return getShapeLayout('brain3', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'brain4svg') {
+      return getShapeLayout('brain4svg', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'brainsvg2') {
+      return getShapeLayout('brainsvg2', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'fist1') {
+      return getShapeLayout('fist1', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'fist') {
+      return getShapeLayout('fist', baseNodes, { ...containerSize, nodeSpace, maxInsideConnections });
+    } else if (shape === 'brainTest') {
+      return getShapeLayout('brainTest', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'brainTest2') {
+      return getShapeLayout('brainTest2', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'muscleTest') {
+      return getShapeLayout('muscleTest', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'muscleTest90x63') {
+      return getShapeLayout('muscleTest90x63', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'muscleTest90x63Fill') {
+      return getShapeLayout('muscleTest90x63Fill', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'topDownBrain') {
+      return getShapeLayout('topDownBrain', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'topDownBrain2') {
+      return getShapeLayout('topDownBrain2', baseNodes, { ...containerSize, nodeSpace });
+    } else if (shape === 'chikara') {
+      return getShapeLayout('chikara', baseNodes, { ...containerSize, nodeSpace });
     } else {
       return getShapeLayout('moebius', baseNodes, { ...containerSize, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
     }
-  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, nodeBrightVar]);
+  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, nodeBrightVar, maxInsideConnections]);
 
-  // Outline paths for the brain3 shape (circle, always in sync with node region)
+  // Outline paths for the brain3 shape (semicircle + triangle, always in sync with node region)
   const brain3Outlines = useMemo(() => {
     if (shape !== 'brain3') return null;
     const { width, height } = containerSize;
     const region = getBrain3RegionParams(width, height);
-    const outline = getBrain3OutlinePoints(region, 120);
-    return { outline };
+    const outlines = getBrain3OutlinePoints(region, 120);
+    return outlines;
+  }, [shape, containerSize]);
+
+  // Outline paths for the brain4svg shape (polygon)
+  const brain4svgOutline = useMemo(() => {
+    if (shape !== 'brain4svg') return null;
+    const { width, height } = containerSize;
+    return getBrain4PolygonOutlinePoints(width, height);
   }, [shape, containerSize]);
 
   // Calculate bounding box for all nodes to set viewBox
   const bounds = useMemo(() => {
-    if (shape === 'brain3' && brain3Outlines && brain3Outlines.outline) {
+    if (shape === 'brain3' && brain3Outlines && brain3Outlines.semicircle) {
       // Use the outline for brain3
       const { x, y, width, height } = getSafeArea(containerSize.width, containerSize.height);
       return { minX: x, minY: y, maxX: x + width, maxY: y + height };
@@ -268,13 +326,51 @@ export default function ShapeCanvas() {
 
   // Determine line and node color based on shape
   const isBrainShape = shape === 'brain' || shape === 'brain2' || shape === 'brain3';
-  const lineColor = isBrainShape ? '#3bb0e0' : '#ffb347';
-  const nodeFill = (brightness: number) => isBrainShape ? `rgba(59, 176, 224, ${brightness || 0.7})` : `rgba(255, 153, 51, ${brightness || 0.7})`;
-  const nodeStroke = isBrainShape ? '#3bb0e0' : '#ffb347';
-  const nodeFilter = isBrainShape ? 'drop-shadow(0 2px 8px #3bb0e055)' : 'drop-shadow(0 2px 8px #ffb34755)';
+  const isBrain4SVG = shape === 'brain4svg';
+  const isMuscleRed = shape === 'muscleTest90x63';
+  const lineColor = isBrainShape || isBrain4SVG ? '#3bb0e0' : isMuscleRed ? '#c0392b' : '#ffb347';
+  const nodeFill = (brightness: number) =>
+    isBrainShape || isBrain4SVG
+      ? `rgba(59, 176, 224, ${brightness || 0.7})`
+      : isMuscleRed
+        ? `rgba(192, 57, 43, ${brightness || 0.7})`
+        : `rgba(255, 153, 51, ${brightness || 0.7})`;
+  const nodeStroke = isBrainShape || isBrain4SVG ? '#3bb0e0' : isMuscleRed ? '#922B21' : '#ffb347';
+  const nodeFilter = isBrainShape || isBrain4SVG
+    ? 'drop-shadow(0 2px 8px #3bb0e055)'
+    : isMuscleRed
+      ? 'drop-shadow(0 2px 8px #c0392b55)'
+      : 'drop-shadow(0 2px 8px #ffb34755)';
+
+  const renderEdges = useCallback((ctx: CanvasRenderingContext2D, positions: NodePosition[]) => {
+    if (!showEdges) return; // Skip edge rendering if edges are hidden
+    
+    ctx.strokeStyle = 'rgba(59, 176, 224, 0.3)';
+    ctx.lineWidth = 1;
+    
+    positions.forEach(node => {
+      if (!node.neighbors) return;
+      node.neighbors.forEach((neighborId: string) => {
+        const neighbor = positions.find(n => n.id === neighborId);
+        if (neighbor) {
+          ctx.beginPath();
+          ctx.moveTo(node.x, node.y);
+          ctx.lineTo(neighbor.x, neighbor.y);
+          ctx.stroke();
+        }
+      });
+    });
+  }, [showEdges]);
 
   return (
     <div ref={containerRef} style={{ width: '100vw', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Draw Shape Navigation Button */}
+      <button
+        onClick={() => navigate('/draw-shape')}
+        style={{ position: 'absolute', top: 24, left: 32, zIndex: 20, padding: '8px 18px', fontSize: 16, borderRadius: 8, background: '#3bb0e0', color: '#fff', border: 'none', fontWeight: 600, boxShadow: '0 2px 8px #0002' }}
+      >
+        Draw Shape
+      </button>
       {/* Controls top right */}
       <div style={{ position: 'absolute', top: 24, right: 32, background: 'rgba(24,30,34,0.92)', padding: 16, borderRadius: 10, boxShadow: '0 2px 12px #0002', zIndex: 10, minWidth: 260 }}>
         <div style={{ marginBottom: 10 }}>
@@ -331,12 +427,35 @@ export default function ShapeCanvas() {
           <span style={{ marginLeft: 8, fontWeight: 500 }}>{nodeSpace.toFixed(2)}</span>
         </div>
         <div style={{ marginBottom: 10 }}>
+          <label htmlFor="max-inside-connections" style={{ fontWeight: 600, marginRight: 8 }}>Max Inside Connections:</label>
+          <input
+            id="max-inside-connections"
+            type="range"
+            min={0}
+            max={5}
+            value={maxInsideConnections}
+            onChange={e => setMaxInsideConnections(Number(e.target.value))}
+            style={{ verticalAlign: 'middle', width: 100 }}
+          />
+          <span style={{ marginLeft: 8, fontWeight: 500 }}>{maxInsideConnections}</span>
+        </div>
+        <div style={{ marginBottom: 10 }}>
           <label htmlFor="show-outline" style={{ fontWeight: 600, marginRight: 8 }}>Shape Outline:</label>
           <input
             id="show-outline"
             type="checkbox"
             checked={showOutline}
             onChange={e => setShowOutline(e.target.checked)}
+            style={{ verticalAlign: 'middle' }}
+          />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label htmlFor="show-edges" style={{ fontWeight: 600, marginRight: 8 }}>Edge Visibility:</label>
+          <input
+            id="show-edges"
+            type="checkbox"
+            checked={showEdges}
+            onChange={e => setShowEdges(e.target.checked)}
             style={{ verticalAlign: 'middle' }}
           />
         </div>
@@ -445,7 +564,15 @@ export default function ShapeCanvas() {
         {showOutline && shape === 'brain3' && brain3Outlines && (
           <g>
             <polyline
-              points={brain3Outlines.outline.map(p => p.join(",")).join(" ")}
+              points={brain3Outlines.semicircle.map(p => p.join(",")).join(" ")}
+              fill="none"
+              stroke="#bbb"
+              strokeDasharray="3,5"
+              strokeWidth={2}
+              opacity={0.7}
+            />
+            <polyline
+              points={brain3Outlines.triangle.map(p => p.join(",")).join(" ")}
               fill="none"
               stroke="#bbb"
               strokeDasharray="3,5"
@@ -454,51 +581,106 @@ export default function ShapeCanvas() {
             />
           </g>
         )}
+        {/* Shape outlines for brain4svg */}
+        {showOutline && shape === 'brain4svg' && brain4svgOutline && (
+          <polyline
+            points={brain4svgOutline.map(p => p.join(",")).join(" ")}
+            fill="none"
+            stroke="#bbb"
+            strokeDasharray="3,5"
+            strokeWidth={2}
+            opacity={0.7}
+          />
+        )}
         {/* Connect nodes with lines to form the loop or grid */}
-        {shape === 'infinity2' || shape === 'infinity3'
-          ? (() => {
-              const lines = [];
-              const seen = new Set();
-              for (const node of nodePositions) {
-                const n = node as any;
-                if (!n.neighbors) continue;
-                for (const neighborId of n.neighbors) {
-                  const key = [n.id, neighborId].sort().join('-');
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  const neighbor = nodePositions.find(nn => nn.id === neighborId);
-                  if (!neighbor) continue;
-                  lines.push(
-                    <line
-                      key={key}
-                      x1={n.x}
-                      y1={n.y}
-                      x2={neighbor.x}
-                      y2={neighbor.y}
-                      stroke={lineColor}
-                      strokeWidth={1.2}
-                      opacity={0.45}
-                    />
-                  );
+        {showEdges && (
+          shape === 'fist'
+            ? (() => {
+                // Detect hubs for the Fist shape
+                const insideNodes = nodePositions.filter(n => n.size === 5);
+                const hubNodes = nodePositions.filter(n => n.size === 5).slice(0, 4); // 4 hubs, as in layout
+                const hubIds = new Set(hubNodes.map(n => n.id));
+                const lines = [];
+                const seen = new Set();
+                for (const node of nodePositions) {
+                  if (!('neighbors' in node) || !Array.isArray((node as any).neighbors)) continue;
+                  for (const neighborId of node.neighbors) {
+                    const key = [node.id, neighborId].sort().join('-');
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    const neighbor = nodePositions.find(nn => nn.id === neighborId);
+                    if (!neighbor || !('neighbors' in neighbor) || !Array.isArray((neighbor as any).neighbors)) continue;
+                    // Determine connection type
+                    const isOutline = node.size === 8 && neighbor.size === 8;
+                    const isHubLine = (hubIds.has(node.id) && !hubIds.has(neighborId)) || (!hubIds.has(node.id) && hubIds.has(neighborId));
+                    const isBothNonHub = !hubIds.has(node.id) && !hubIds.has(neighborId);
+                    let opacity = 0.8; // default: outline
+                    if (isHubLine) {
+                      opacity = 0.6; // inside strong
+                    } else if (isBothNonHub) {
+                      opacity = 0.2; // inside weak
+                    }
+                    lines.push(
+                      <line
+                        key={key}
+                        x1={node.x}
+                        y1={node.y}
+                        x2={neighbor.x}
+                        y2={neighbor.y}
+                        stroke={lineColor}
+                        strokeWidth={isOutline ? 2 : 1.2}
+                        opacity={opacity}
+                      />
+                    );
+                  }
                 }
-              }
-              return lines;
-            })()
-          : nodePositions.map((node, i) => {
-              const next = nodePositions[(i + 1) % nodePositions.length];
-              return (
-                <line
-                  key={node.id + '-line'}
-                  x1={node.x}
-                  y1={node.y}
-                  x2={next.x}
-                  y2={next.y}
-                  stroke={lineColor}
-                  strokeWidth={2}
-                  opacity={0.25}
-                />
-              );
-            })}
+                return lines;
+              })()
+            : shape === 'infinity2' || shape === 'infinity3'
+            ? (() => {
+                const lines = [];
+                const seen = new Set();
+                for (const node of nodePositions) {
+                  const n = node as any;
+                  if (!n.neighbors) continue;
+                  for (const neighborId of n.neighbors) {
+                    const key = [n.id, neighborId].sort().join('-');
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    const neighbor = nodePositions.find(nn => nn.id === neighborId);
+                    if (!neighbor) continue;
+                    lines.push(
+                      <line
+                        key={key}
+                        x1={n.x}
+                        y1={n.y}
+                        x2={neighbor.x}
+                        y2={neighbor.y}
+                        stroke={lineColor}
+                        strokeWidth={1.2}
+                        opacity={0.45}
+                      />
+                    );
+                  }
+                }
+                return lines;
+              })()
+            : nodePositions.map((node, i) => {
+                const next = nodePositions[(i + 1) % nodePositions.length];
+                return (
+                  <line
+                    key={node.id + '-line'}
+                    x1={node.x}
+                    y1={node.y}
+                    x2={next.x}
+                    y2={next.y}
+                    stroke={lineColor}
+                    strokeWidth={2}
+                    opacity={0.25}
+                  />
+                );
+              })
+        )}
         {/* Render nodes */}
         {nodePositions.map((node) => (
           <circle

@@ -8,8 +8,10 @@ export interface NodePosition {
   x: number;
   y: number;
   brightness: number;
-  neighbors?: string[];
-  score?: number;
+  neighbors: string[];
+  score: number;
+  size?: number;
+  color?: string;
 }
 
 export interface ShapeParams {
