@@ -122,7 +122,7 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
           id: nodes[count].id,
           score: nodes[count].score,
           region: 'left',
-          brightness: 0.4 + 0.6 * (intensity / 10),
+          brightness: 0.7, // constant, rendering will handle visual brightness
           neighbors: [],
           color: '#3bb0e0',
           size: 8,
@@ -150,7 +150,7 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
           id: nodes[count].id,
           score: nodes[count].score,
           region: 'right',
-          brightness: 0.4 + 0.6 * (intensity / 10),
+          brightness: 0.7, // constant
           neighbors: [],
           color: '#3bb0e0',
           size: 8,
@@ -176,7 +176,7 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
           id: nodes[count].id,
           score: nodes[count].score,
           region: 'band',
-          brightness: 0.4 + 0.6 * (intensity / 10),
+          brightness: 0.7, // constant
           neighbors: [],
           color: '#3bb0e0',
           size: 8,
@@ -205,7 +205,7 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
           id: nodes[count].id,
           score: nodes[count].score,
           region: 'stem',
-          brightness: 0.4 + 0.6 * (intensity / 10),
+          brightness: 0.7, // constant
           neighbors: [],
           color: '#3bb0e0',
           size: 8,
@@ -233,7 +233,7 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
           id: nodes[count].id,
           score: nodes[count].score,
           region: 'oblong',
-          brightness: 0.4 + 0.6 * (intensity / 10),
+          brightness: 0.7, // constant
           neighbors: [],
           color: '#3bb0e0',
           size: 8,
@@ -331,38 +331,31 @@ export function generateBrainLayout(nodes: SkillNode[], params: ShapeParams): No
       let dx = 0, dy = 0;
       for (let j = 0; j < points.length; j++) {
         if (i === j) continue;
-        if (points[i].region !== points[j].region) continue; // only intra-region repulsion
-        let vx = points[i].x - points[j].x;
-        let vy = points[i].y - points[j].y;
-        let dist = Math.sqrt(vx * vx + vy * vy) + 0.01;
-        let rep = (k * k) / dist;
-        dx += (vx / dist) * rep;
-        dy += (vy / dist) * rep;
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) + 0.01;
+        const rep = (k * k) / dist;
+        dx += (points[i].x - points[j].x) / dist * rep;
+        dy += (points[i].y - points[j].y) / dist * rep;
       }
       points[i].x += dx * 0.002;
       points[i].y += dy * 0.002;
+      keepInRegion(points[i]);
     }
-
     // Attraction (edges)
     for (let i = 0; i < points.length; i++) {
-      const node = points[i];
-      for (const nid of node.neighbors) {
-        const other = points.find(n => n.id === nid);
-        if (!other) continue;
-        let vx = other.x - node.x;
-        let vy = other.y - node.y;
-        let dist = Math.sqrt(vx * vx + vy * vy) + 0.01;
-        // Attraction is stronger for higher intensity
-        let attr = ((dist * dist) / k) * (1 + 0.5 * (node.intensity === 10 ? 2 : node.intensity / 10));
-        node.x += (vx / dist) * attr * 0.0015;
-        node.y += (vy / dist) * attr * 0.0015;
+      for (const neighborId of points[i].neighbors) {
+        const j = points.findIndex(p => p.id === neighborId);
+        if (j === -1) continue;
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) + 0.01;
+        const attr = (dist * dist) / k;
+        points[i].x -= (points[i].x - points[j].x) / dist * attr * 0.001;
+        points[i].y -= (points[i].y - points[j].y) / dist * attr * 0.001;
+        keepInRegion(points[i]);
       }
-      keepInRegion(node);
     }
   }
 
   // Return as NodePosition[]
-  return points.map(({ region, intensity, ...rest }) => rest);
+  return points.map(({ intensity, region, color, size, ...rest }) => rest);
 }
 
 // --- Brain 2 region geometry ---
@@ -806,20 +799,14 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
   const cy = height / 2;
   const nLeft = Math.floor(n / 2);
   const nRight = n - nLeft;
+  type FNode = NodePosition & { lobe: 'left' | 'right', intensity: number };
   // Helper: sample inside ellipse
   function sampleEllipse(cx: number, cy: number, rx: number, ry: number): [number, number] {
-    let x = 0, y = 0;
-    let tries = 0;
-    do {
-      const t = 2 * Math.PI * Math.random();
-      const r = Math.sqrt(Math.random());
-      x = cx + rx * r * Math.cos(t);
-      y = cy + ry * r * Math.sin(t);
-      tries++;
-    } while (tries < 10 && (Math.abs(x - width / 2) < gap / 2)); // ensure not in gap
-    return [x, y];
+    const t = 2 * Math.PI * Math.random();
+    const r = Math.sqrt(Math.random());
+    return [cx + r * rx * Math.cos(t), cy + r * ry * Math.sin(t)];
   }
-  // Helper: random intensity, 1-10, with lower chance for 10
+  // Helper: random intensity
   function randomIntensity() {
     const r = Math.random();
     if (r > 0.97) return 10;
@@ -833,8 +820,6 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
     if (r > 0.07) return 2;
     return 1;
   }
-  // Place nodes, assign lobe and intensity
-  type FNode = NodePosition & { lobe: 'left' | 'right', intensity: number };
   const points: FNode[] = [];
   for (let i = 0; i < nLeft; i++) {
     const [x, y] = sampleEllipse(cxL, cy, lobeWidth / 2, lobeHeight / 2);
@@ -843,7 +828,7 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
       id: nodes[i].id,
       x,
       y,
-      brightness: 0.4 + 0.6 * (intensity / 10),
+      brightness: 0.7, // constant
       neighbors: [],
       score: nodes[i].score,
       color: '#3bb0e0',
@@ -859,7 +844,7 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
       id: nodes[nLeft + i].id,
       x,
       y,
-      brightness: 0.4 + 0.6 * (intensity / 10),
+      brightness: 0.7, // constant
       neighbors: [],
       score: nodes[nLeft + i].score,
       color: '#3bb0e0',
@@ -889,18 +874,24 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
   const ITER = 100;
   const AREA = width * height;
   const k = Math.sqrt(AREA / n) * 0.6;
-  function keepInEllipse(node: FNode) {
-    const cx = node.lobe === 'left' ? cxL : cxR;
-    const rx = lobeWidth / 2, ry = lobeHeight / 2;
-    let dx = node.x - cx, dy = node.y - cy;
-    if ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) > 1) {
-      const angle = Math.atan2(dy, dx);
-      node.x = cx + rx * Math.cos(angle);
-      node.y = cy + ry * Math.sin(angle);
+  function keepInLobe(node: FNode) {
+    if (node.lobe === 'left') {
+      const dx = node.x - cxL;
+      const dy = node.y - cy;
+      if ((dx * dx) / ((lobeWidth / 2) ** 2) + (dy * dy) / ((lobeHeight / 2) ** 2) > 1) {
+        const [x, y] = sampleEllipse(cxL, cy, lobeWidth / 2, lobeHeight / 2);
+        node.x = x;
+        node.y = y;
+      }
+    } else {
+      const dx = node.x - cxR;
+      const dy = node.y - cy;
+      if ((dx * dx) / ((lobeWidth / 2) ** 2) + (dy * dy) / ((lobeHeight / 2) ** 2) > 1) {
+        const [x, y] = sampleEllipse(cxR, cy, lobeWidth / 2, lobeHeight / 2);
+        node.x = x;
+        node.y = y;
+      }
     }
-    // Prevent crossing the gap
-    if (node.lobe === 'left' && node.x > width / 2 - gap / 2) node.x = width / 2 - gap / 2;
-    if (node.lobe === 'right' && node.x < width / 2 + gap / 2) node.x = width / 2 + gap / 2;
   }
   for (let iter = 0; iter < ITER; iter++) {
     // Repulsion
@@ -908,36 +899,30 @@ export function generateTopDownBrainLayout(nodes: SkillNode[], params: ShapePara
       let dx = 0, dy = 0;
       for (let j = 0; j < points.length; j++) {
         if (i === j) continue;
-        if (points[i].lobe !== points[j].lobe) continue; // only intra-lobe repulsion
-        let vx = points[i].x - points[j].x;
-        let vy = points[i].y - points[j].y;
-        let dist = Math.sqrt(vx * vx + vy * vy) + 0.01;
-        let rep = (k * k) / dist;
-        dx += (vx / dist) * rep;
-        dy += (vy / dist) * rep;
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) + 0.01;
+        const rep = (k * k) / dist;
+        dx += (points[i].x - points[j].x) / dist * rep;
+        dy += (points[i].y - points[j].y) / dist * rep;
       }
       points[i].x += dx * 0.002;
       points[i].y += dy * 0.002;
+      keepInLobe(points[i]);
     }
     // Attraction (edges)
     for (let i = 0; i < points.length; i++) {
-      const node = points[i];
-      for (const nid of node.neighbors) {
-        const other = points.find(n => n.id === nid);
-        if (!other) continue;
-        let vx = other.x - node.x;
-        let vy = other.y - node.y;
-        let dist = Math.sqrt(vx * vx + vy * vy) + 0.01;
-        // Attraction is stronger for higher intensity
-        let attr = ((dist * dist) / k) * (1 + 0.5 * (node.intensity === 10 ? 2 : node.intensity / 10));
-        node.x += (vx / dist) * attr * 0.0015;
-        node.y += (vy / dist) * attr * 0.0015;
+      for (const neighborId of points[i].neighbors) {
+        const j = points.findIndex(p => p.id === neighborId);
+        if (j === -1) continue;
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) + 0.01;
+        const attr = (dist * dist) / k;
+        points[i].x -= (points[i].x - points[j].x) / dist * attr * 0.001;
+        points[i].y -= (points[i].y - points[j].y) / dist * attr * 0.001;
+        keepInLobe(points[i]);
       }
-      keepInEllipse(node);
     }
   }
   // Return as NodePosition[]
-  return points.map(({ lobe, intensity, ...rest }) => rest);
+  return points.map(({ intensity, lobe, color, size, ...rest }) => rest);
 }
 
 // --- Top Down Brain 2 (Polygon Boundary) ---

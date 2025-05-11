@@ -4,6 +4,7 @@ import dummyNodes from '../data/dummyNodes.json';
 import { getShapeLayout } from '../layout/shapeLayout';
 import { scoreToRadius } from '../shapes/moebius';
 import { getBrain3RegionParams, getBrain3OutlinePoints, getBrain4PolygonOutlinePoints } from '../shapes/brain';
+import seedrandom from 'seedrandom';
 
 // Add NodePosition interface
 interface NodePosition {
@@ -131,18 +132,29 @@ function applyConnections(nodes: NodePosition[], type: string): NodePosition[] {
       }
       break;
     case 'incomplete': {
-      // Split into 3 clusters
-      const clusters = 3;
-      const perCluster = Math.ceil(n / clusters);
-      for (let c = 0; c < clusters; c++) {
-        const start = c * perCluster;
-        const end = Math.min((c + 1) * perCluster, n);
-        for (let i = start; i < end; i++) {
-          for (let j = start; j < end; j++) {
-            if (i !== j) newNodes[i].neighbors!.push(newNodes[j].id);
-          }
+      // Some lonely nodes, rest in small incomplete clusters
+      const lonelyCount = Math.max(1, Math.floor(n * 0.15)); // 15% lonely
+      const shuffled = [...newNodes].sort(() => Math.random() - 0.5);
+      const lonelyNodes = shuffled.slice(0, lonelyCount);
+      const clustered = shuffled.slice(lonelyCount);
+      // Mark lonely nodes (no neighbors)
+      lonelyNodes.forEach(node => { node.neighbors = []; });
+      // Split clustered nodes into 2-4 clusters
+      const clusterCount = Math.min(4, Math.max(2, Math.floor(clustered.length / 3)));
+      const clusters: NodePosition[][] = Array.from({ length: clusterCount }, () => []);
+      clustered.forEach((node, i) => {
+        clusters[i % clusterCount].push(node);
+      });
+      // For each cluster, connect each node to 1-2 random others in the same cluster
+      clusters.forEach(cluster => {
+        for (let i = 0; i < cluster.length; i++) {
+          const node = cluster[i];
+          const others = cluster.filter((n, idx) => idx !== i);
+          const numLinks = Math.min(2, others.length);
+          const links = others.sort(() => Math.random() - 0.5).slice(0, numLinks);
+          node.neighbors = Array.from(new Set([...(node.neighbors || []), ...links.map(n => n.id)]));
         }
-      }
+      });
       break;
     }
     case 'none':
@@ -152,6 +164,16 @@ function applyConnections(nodes: NodePosition[], type: string): NodePosition[] {
       break;
   }
   return newNodes;
+}
+
+// Helper: stable hash for node id
+function hashString(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
 }
 
 export default function ShapeCanvas() {
@@ -167,6 +189,7 @@ export default function ShapeCanvas() {
   const navigate = useNavigate();
   const [maxInsideConnections, setMaxInsideConnections] = useState(1); // New state for inside node connections
   const [connectionType, setConnectionType] = useState('chain');
+  const [randomSeed, setRandomSeed] = useState(() => Math.floor(Math.random() * 1e9).toString());
 
   // Responsive container size
   useEffect(() => {
@@ -278,7 +301,7 @@ export default function ShapeCanvas() {
     }
     // Apply connection logic
     return applyConnections(positions, connectionType);
-  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, nodeBrightVar, maxInsideConnections, connectionType]);
+  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, maxInsideConnections, connectionType, randomSeed]);
 
   // Outline paths for the brain3 shape (semicircle + triangle, always in sync with node region)
   const brain3Outlines = useMemo(() => {
@@ -571,6 +594,15 @@ export default function ShapeCanvas() {
             {CONNECTION_TYPES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
+        <div style={{ marginBottom: 10 }}>
+          <button
+            onClick={() => setRandomSeed(Math.floor(Math.random() * 1e9).toString())}
+            style={{ fontWeight: 600, padding: '4px 12px', borderRadius: 6, background: '#3bb0e0', color: '#fff', border: 'none', marginRight: 8 }}
+          >
+            Randomize Layout
+          </button>
+          <span style={{ fontSize: 12, color: '#888' }}>Seed: {randomSeed}</span>
+        </div>
       </div>
       {/* Shape selector */}
       <div style={{ marginBottom: 16 }}>
@@ -794,18 +826,24 @@ export default function ShapeCanvas() {
               })
         )}
         {/* Render nodes */}
-        {nodePositions.map((node) => (
-          <circle
-            key={node.id}
-            cx={node.x}
-            cy={node.y}
-            r={'size' in node ? node.size : scoreToRadius(node.score || 5) * (nodeSizeVar === 1 ? 1 : 0.8 + Math.random() * 0.4)}
-            fill={nodeFill(node.brightness || 0.7)}
-            stroke={nodeStroke}
-            strokeWidth={(node.brightness || 0.7) * 2.2}
-            style={{ filter: nodeFilter }}
-          />
-        ))}
+        {nodePositions.map((node) => {
+          // Node Brightness logic: 1 = all dark, 10 = 80% bright
+          const brightPercent = 0.8 * (nodeBrightVar - 1) / 9; // 0 at 1, 0.8 at 10
+          const isBright = (hashString(node.id) % 100) < brightPercent * 100;
+          const brightness = isBright ? 0.95 : 0.3;
+          return (
+            <circle
+              key={node.id}
+              cx={node.x}
+              cy={node.y}
+              r={'size' in node ? node.size : scoreToRadius(node.score || 5) * (nodeSizeVar === 1 ? 1 : 0.8 + Math.random() * 0.4)}
+              fill={nodeFill(brightness)}
+              stroke={nodeStroke}
+              strokeWidth={brightness * 2.2}
+              style={{ filter: nodeFilter }}
+            />
+          );
+        })}
       </svg>
     </div>
   );
