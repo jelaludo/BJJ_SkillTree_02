@@ -61,6 +61,12 @@ export default function ManualGrid() {
     (search === '' || n.name.toLowerCase().includes(search.toLowerCase()))
   );
 
+  // Group unplaced nodes by category
+  const groupedUnplaced = CATEGORIES.map(cat => ({
+    category: cat,
+    nodes: nodes.filter(n => !n.placed && n.category === cat && (search === '' || n.name.toLowerCase().includes(search.toLowerCase())))
+  })).filter(group => group.nodes.length > 0);
+
   // Add node
   function addNode() {
     if (!newNode.name.trim()) return;
@@ -149,57 +155,79 @@ export default function ManualGrid() {
           </select>
         </div>
         <h3>Placed Nodes</h3>
+        {/* Placed nodes list */}
         <ul style={{ listStyle: 'none', padding: 0, marginBottom: 16 }}>
           {filteredPlaced.length === 0 && <li style={{ color: '#888', fontStyle: 'italic' }}>None</li>}
           {filteredPlaced.map(node => (
             <li
               key={node.id}
               style={{
-                marginBottom: 8,
-                background: selectedNodeId === node.id ? '#d0e0ff' : '#e0ffe0',
+                marginBottom: 6,
+                background: selectedNodeId === node.id ? '#e6f0fa' : '#fff',
                 borderRadius: 6,
                 padding: 8,
-                border: '1px solid #ddd',
+                border: selectedNodeId === node.id ? '2px solid #3bb0e0' : '1px solid #ddd',
                 cursor: 'pointer',
+                color: '#222',
+                fontWeight: selectedNodeId === node.id ? 600 : 400,
               }}
               onClick={() => setSelectedNodeId(node.id)}
             >
-              <div style={{ fontWeight: 600 }}>{node.name}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>{node.category}</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
-                Placed at ({Math.round(node.x!)}, {Math.round(node.y!)})
-              </div>
-              <button onClick={e => { e.stopPropagation(); setEditing(node); }} style={{ marginRight: 6 }}>Edit</button>
-              <button onClick={e => { e.stopPropagation(); removeNode(node.id); }} style={{ marginRight: 6, color: 'red' }}>Remove</button>
-              <button onClick={e => { e.stopPropagation(); togglePlaced(node.id); }}>Unplace</button>
+              {node.name}
+              {node.x !== null && node.y !== null && (
+                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
+                  ({Math.round(node.x)}, {Math.round(node.y)})
+                </span>
+              )}
             </li>
           ))}
         </ul>
+        {/* Placed node action bar */}
+        {selectedNodeId && filteredPlaced.some(n => n.id === selectedNodeId) && (
+          <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+            <button onClick={() => setEditing(nodes.find(n => n.id === selectedNodeId)!)}>Edit</button>
+            <button onClick={() => removeNode(selectedNodeId)} style={{ color: 'red' }}>Remove</button>
+            <button onClick={() => togglePlaced(selectedNodeId)}>Unplace</button>
+          </div>
+        )}
         <h3>Unplaced Nodes</h3>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {filteredUnplaced.length === 0 && <li style={{ color: '#888', fontStyle: 'italic' }}>None</li>}
-          {filteredUnplaced.map(node => (
-            <li
-              key={node.id}
-              style={{
-                marginBottom: 8,
-                background: selectedNodeId === node.id ? '#d0e0ff' : '#fff',
-                borderRadius: 6,
-                padding: 8,
-                border: '1px solid #ddd',
-                cursor: 'pointer',
-              }}
-              onClick={() => setSelectedNodeId(node.id)}
-            >
-              <div style={{ fontWeight: 600 }}>{node.name}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>{node.category}</div>
-              <div style={{ fontSize: 12, color: '#888' }}>Not placed</div>
-              <button onClick={e => { e.stopPropagation(); setEditing(node); }} style={{ marginRight: 6 }}>Edit</button>
-              <button onClick={e => { e.stopPropagation(); removeNode(node.id); }} style={{ marginRight: 6, color: 'red' }}>Remove</button>
-              <button onClick={e => { e.stopPropagation(); togglePlaced(node.id); }}>Place</button>
-            </li>
+        {/* Grouped unplaced nodes by category */}
+        <div>
+          {groupedUnplaced.length === 0 && <div style={{ color: '#888', fontStyle: 'italic' }}>None</div>}
+          {groupedUnplaced.map(group => (
+            <div key={group.category} style={{ marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, color: '#3bb0e0', marginBottom: 2 }}>{group.category}</div>
+              <ul style={{ listStyle: 'none', paddingLeft: 16 }}>
+                {group.nodes.map(node => (
+                  <li
+                    key={node.id}
+                    style={{
+                      marginBottom: 4,
+                      background: selectedNodeId === node.id ? '#e6f0fa' : '#fff',
+                      borderRadius: 6,
+                      padding: 6,
+                      border: selectedNodeId === node.id ? '2px solid #3bb0e0' : '1px solid #ddd',
+                      cursor: 'pointer',
+                      color: '#222',
+                      fontWeight: selectedNodeId === node.id ? 600 : 400,
+                    }}
+                    onClick={() => setSelectedNodeId(node.id)}
+                  >
+                    {node.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
+        {/* Unplaced node action bar */}
+        {selectedNodeId && nodes.some(n => n.id === selectedNodeId && !n.placed) && (
+          <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+            <button onClick={() => setEditing(nodes.find(n => n.id === selectedNodeId)!)}>Edit</button>
+            <button onClick={() => removeNode(selectedNodeId)} style={{ color: 'red' }}>Remove</button>
+            <button onClick={() => togglePlaced(selectedNodeId)}>Place</button>
+          </div>
+        )}
         <h3>Add Node</h3>
         <input
           type="text"
@@ -305,9 +333,11 @@ export default function ManualGrid() {
             <button onClick={saveEdit} style={{ marginRight: 8 }}>Save</button>
             <button onClick={() => setEditing(null)}>Cancel</button>
           </div>
-        ) :
+        ) : selectedNodeId ? (
+          <div style={{ color: '#888' }}>Select "Edit" above to edit this node.</div>
+        ) : (
           <div style={{ color: '#888' }}>Select a node to edit.</div>
-        }
+        )}
       </div>
     </div>
   );
