@@ -4,7 +4,6 @@ import dummyNodes from '../data/dummyNodes.json';
 import { getShapeLayout } from '../layout/shapeLayout';
 import { scoreToRadius } from '../shapes/moebius';
 import { getBrain3RegionParams, getBrain3OutlinePoints, getBrain4PolygonOutlinePoints } from '../shapes/brain';
-import seedrandom from 'seedrandom';
 
 // Add NodePosition interface
 interface NodePosition {
@@ -190,6 +189,7 @@ export default function ShapeCanvas() {
   const [maxInsideConnections, setMaxInsideConnections] = useState(1); // New state for inside node connections
   const [connectionType, setConnectionType] = useState('chain');
   const [randomSeed, setRandomSeed] = useState(() => Math.floor(Math.random() * 1e9).toString());
+  const [nodeClusters, setNodeClusters] = useState(1); // 1 = even, 10 = tight clusters
 
   // Responsive container size
   useEffect(() => {
@@ -235,7 +235,44 @@ export default function ShapeCanvas() {
     return all;
   }, [shape, baseNodes, nodeSpace]);
 
-  // Custom layout for multi-layered infinity
+  // Helper: seeded random number generator
+  function seededRandom(seed: string) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < seed.length; i++) {
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return function() {
+      h += h << 13; h ^= h >>> 7;
+      h += h << 3; h ^= h >>> 17;
+      h += h << 5;
+      return (h >>> 0) / 4294967296;
+    };
+  }
+
+  // Clustering logic: move nodes toward cluster centers
+  function applyClustering(positions: NodePosition[], clusters: number, seed: string, strength: number) {
+    if (clusters <= 1) return positions;
+    const rand = seededRandom(seed + 'clusters');
+    // Pick cluster centers
+    const centers = Array.from({ length: clusters }, () => {
+      const idx = Math.floor(rand() * positions.length);
+      return { x: positions[idx].x, y: positions[idx].y };
+    });
+    // Assign each node to a cluster
+    return positions.map((node, i) => {
+      const clusterIdx = Math.floor(rand() * clusters);
+      const center = centers[clusterIdx];
+      // Interpolate: strength=0 (no move), strength=1 (at center)
+      const t = strength;
+      return {
+        ...node,
+        x: node.x * (1 - t) + center.x * t,
+        y: node.y * (1 - t) + center.y * t,
+      };
+    });
+  }
+
   const nodePositions = useMemo(() => {
     let positions: NodePosition[];
     if (shape === 'infinity') {
@@ -299,9 +336,15 @@ export default function ShapeCanvas() {
     } else {
       positions = getShapeLayout('moebius', baseNodes, { ...containerSize, nodeSpace }).map((n) => ({ ...n, score: baseNodes.find(d => d.id === n.id)?.score || 1 }));
     }
-    // Apply connection logic
-    return applyConnections(positions, connectionType);
-  }, [shape, layeredNodes, baseNodes, nodeSpace, containerSize, nodeSizeVar, maxInsideConnections, connectionType, randomSeed]);
+    let clustered = positions;
+    if (nodeClusters > 1) {
+      // Map slider 1-10 to clusters 1-6, and strength 0-0.85
+      const nClusters = 12 - nodeClusters; // 11 at 1, 2 at 10
+      const strength = (nodeClusters - 1) / 12 * 0.85; // max 0.85
+      clustered = applyClustering(positions, nClusters, randomSeed, strength);
+    }
+    return applyConnections(clustered, connectionType);
+  }, [shape, layeredNodes, baseNodes, containerSize, maxInsideConnections, connectionType, randomSeed, nodeClusters]);
 
   // Outline paths for the brain3 shape (semicircle + triangle, always in sync with node region)
   const brain3Outlines = useMemo(() => {
@@ -495,6 +538,12 @@ export default function ShapeCanvas() {
       >
         Draw Shape
       </button>
+      <button
+        onClick={() => navigate('/manual-grid')}
+        style={{ position: 'absolute', top: 24, left: 170, zIndex: 20, padding: '8px 18px', fontSize: 16, borderRadius: 8, background: '#3bb0e0', color: '#fff', border: 'none', fontWeight: 600, boxShadow: '0 2px 8px #0002' }}
+      >
+        Manual Grid
+      </button>
       {/* Controls top right */}
       <div style={{ position: 'absolute', top: 24, right: 32, background: 'rgba(24,30,34,0.92)', padding: 16, borderRadius: 10, boxShadow: '0 2px 12px #0002', zIndex: 10, minWidth: 260 }}>
         <div style={{ marginBottom: 10 }}>
@@ -536,19 +585,18 @@ export default function ShapeCanvas() {
           />
           <span style={{ marginLeft: 8, fontWeight: 500 }}>{nodeBrightVar}</span>
         </div>
-        <div>
-          <label htmlFor="node-space" style={{ fontWeight: 600, marginRight: 8 }}>Node Space:</label>
+        <div style={{ marginBottom: 10 }}>
+          <label htmlFor="node-clusters" style={{ fontWeight: 600, marginRight: 8 }}>Node Clusters:</label>
           <input
-            id="node-space"
+            id="node-clusters"
             type="range"
-            min={0.5}
-            max={2.0}
-            step={0.01}
-            value={nodeSpace}
-            onChange={e => setNodeSpace(Number(e.target.value))}
+            min={1}
+            max={10}
+            value={nodeClusters}
+            onChange={e => setNodeClusters(Number(e.target.value))}
             style={{ verticalAlign: 'middle', width: 100 }}
           />
-          <span style={{ marginLeft: 8, fontWeight: 500 }}>{nodeSpace.toFixed(2)}</span>
+          <span style={{ marginLeft: 8, fontWeight: 500 }}>{nodeClusters}</span>
         </div>
         <div style={{ marginBottom: 10 }}>
           <label htmlFor="max-inside-connections" style={{ fontWeight: 600, marginRight: 8 }}>Max Inside Connections:</label>
@@ -831,12 +879,16 @@ export default function ShapeCanvas() {
           const brightPercent = 0.8 * (nodeBrightVar - 1) / 9; // 0 at 1, 0.8 at 10
           const isBright = (hashString(node.id) % 100) < brightPercent * 100;
           const brightness = isBright ? 0.95 : 0.3;
+          // Node Size logic: at nodeSizeVar=1, all same; at 10, bright nodes are 2x size
+          const baseSize = 8;
+          const sizeScale = nodeSizeVar === 1 ? 1 : 1 + (isBright ? (nodeSizeVar - 1) / 9 : 0);
+          const size = baseSize * sizeScale;
           return (
             <circle
               key={node.id}
               cx={node.x}
               cy={node.y}
-              r={'size' in node ? node.size : scoreToRadius(node.score || 5) * (nodeSizeVar === 1 ? 1 : 0.8 + Math.random() * 0.4)}
+              r={size}
               fill={nodeFill(brightness)}
               stroke={nodeStroke}
               strokeWidth={brightness * 2.2}
