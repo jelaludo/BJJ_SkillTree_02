@@ -23,8 +23,20 @@ const CATEGORIES = [
   'Internal',
 ];
 
+// Helper: get all shape names from localStorage
+function getAllShapeNames() {
+  return Object.keys(localStorage)
+    .filter(k => k.startsWith('bjj_shape_'))
+    .map(k => k.replace('bjj_shape_', ''));
+}
+
 export default function ManualGrid() {
-  const [nodes, setNodes] = useState<MasterNode[]>(masterNodes);
+  const [shapeName, setShapeName] = useState<string>(() => {
+    const all = getAllShapeNames();
+    return all.length > 0 ? all[0] : 'Default';
+  });
+  const [newShapeName, setNewShapeName] = useState('');
+  const [nodes, setNodes] = useState<MasterNode[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState<MasterNode | null>(null);
@@ -35,19 +47,36 @@ export default function ManualGrid() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const canvasRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [connectionSearch, setConnectionSearch] = useState('');
+  const [showConnectionDropdown, setShowConnectionDropdown] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  // Save nodes to localStorage for persistence
+  // On mount or shape change, load nodes for this shape
   useEffect(() => {
-    localStorage.setItem('bjj_nodes', JSON.stringify(nodes));
-  }, [nodes]);
-
-  // On mount, load from localStorage if available
-  useEffect(() => {
-    const saved = localStorage.getItem('bjj_nodes');
+    const key = 'bjj_shape_' + shapeName;
+    const saved = localStorage.getItem(key);
     if (saved) {
       setNodes(JSON.parse(saved));
+    } else {
+      // Start with a fresh copy of masterNodes
+      setNodes(masterNodes.map(n => ({ ...n })));
     }
-  }, []);
+    setSelectedNodeId(null);
+  }, [shapeName]);
+
+  // Autosave nodes to localStorage for this shape
+  useEffect(() => {
+    if (!shapeName) return;
+    localStorage.setItem('bjj_shape_' + shapeName, JSON.stringify(nodes));
+  }, [nodes, shapeName]);
+
+  // Shape management
+  const allShapeNames = getAllShapeNames();
+  function handleNewShape() {
+    if (!newShapeName.trim()) return;
+    setShapeName(newShapeName.trim());
+    setNewShapeName('');
+  }
 
   // Filtered nodes with search
   const filteredPlaced = nodes.filter(n =>
@@ -135,11 +164,54 @@ export default function ManualGrid() {
   // Placed nodes for current category
   const placedNodes = nodes.filter(n => n.placed && n.x !== null && n.y !== null && (filter === 'all' || n.category === filter));
 
+  // Helper: get node by id
+  const selectedNode = nodes.find(n => n.id === selectedNodeId) || null;
+
+  // Helper: get nearby nodes (for placed nodes, within 200px)
+  function getNearbyNodes(node: MasterNode) {
+    if (node.x == null || node.y == null) return [];
+    return nodes.filter(n => n.id !== node.id && n.x != null && n.y != null &&
+      Math.hypot(n.x! - node.x!, n.y! - node.y!) < 200);
+  }
+
+  // Helper: get all nodes for search/autocomplete
+  function getConnectionOptions(node: MasterNode) {
+    // Placed nodes first, then unplaced
+    return nodes
+      .filter(n => n.id !== node.id)
+      .sort((a, b) => (b.placed ? 1 : 0) - (a.placed ? 1 : 0) || a.name.localeCompare(b.name));
+  }
+
+  // Helper: get filtered connection options for search (show all placed nodes by default)
+  function getFilteredConnectionOptions(node: MasterNode, search: string) {
+    let options = nodes.filter(n => n.id !== node.id && !node.connections.includes(n.id) && n.placed);
+    if (search.trim()) {
+      options = options.filter(n => n.name.toLowerCase().includes(search.toLowerCase()));
+    }
+    return options.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       {/* Left: Node list */}
       <div style={{ width: 340, borderRight: '1px solid #ccc', padding: 16, overflowY: 'auto' }}>
         <button onClick={() => navigate('/')} style={{ marginBottom: 16, padding: '6px 16px', fontSize: 15, borderRadius: 7, background: '#3bb0e0', color: '#fff', border: 'none', fontWeight: 600 }}>Back</button>
+        {/* Shape selector */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontWeight: 600, marginRight: 8 }}>Shape:</label>
+          <select value={shapeName} onChange={e => setShapeName(e.target.value)} style={{ marginRight: 8 }}>
+            {allShapeNames.length === 0 && <option value="Default">Default</option>}
+            {allShapeNames.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <input
+            type="text"
+            placeholder="New shape name"
+            value={newShapeName}
+            onChange={e => setNewShapeName(e.target.value)}
+            style={{ width: 110, marginRight: 4 }}
+          />
+          <button onClick={handleNewShape} style={{ padding: '2px 10px' }}>New</button>
+        </div>
         <h2>Nodes</h2>
         <div style={{ marginBottom: 8 }}>
           <input
@@ -266,17 +338,52 @@ export default function ManualGrid() {
                 <line y1={i * canvasSize.height / 20} x1={0} y2={i * canvasSize.height / 20} x2={canvasSize.width} stroke="#444" strokeWidth={1} />
               </g>
             ))}
+            {/* Draw connection lines between placed nodes */}
+            {nodes.filter(n => n.placed && n.x !== null && n.y !== null).map(node => (
+              node.connections
+                .map(connId => nodes.find(n2 => n2.id === connId && n2.placed && n2.x !== null && n2.y !== null))
+                .filter((connNode): connNode is MasterNode => !!connNode)
+                .map(connNode => (
+                  <line
+                    key={node.id + '-' + connNode.id}
+                    x1={node.x!}
+                    y1={node.y!}
+                    x2={connNode.x!}
+                    y2={connNode.y!}
+                    stroke="#3bb0e0"
+                    strokeWidth={2}
+                    opacity={0.7}
+                  />
+                ))
+            ))}
             {/* Placed nodes */}
             {placedNodes.map(node => (
-              <circle
-                key={node.id}
-                cx={node.x!}
-                cy={node.y!}
-                r={node.size}
-                fill={selectedNodeId === node.id ? '#3bb0e0' : '#ffb347'}
-                stroke="#222"
-                strokeWidth={2}
-              />
+              <g key={node.id}>
+                <circle
+                  cx={node.x!}
+                  cy={node.y!}
+                  r={node.size}
+                  fill={selectedNodeId === node.id ? '#3bb0e0' : '#ffb347'}
+                  stroke="#222"
+                  strokeWidth={2}
+                  onMouseEnter={() => setHoveredNodeId(node.id)}
+                  onMouseLeave={() => setHoveredNodeId(null)}
+                />
+                {hoveredNodeId === node.id && (
+                  <text
+                    x={node.x! + 12}
+                    y={node.y! - 12}
+                    fill="#fff"
+                    fontSize={15}
+                    fontWeight={700}
+                    stroke="#222"
+                    strokeWidth={0.5}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    {node.name}
+                  </text>
+                )}
+              </g>
             ))}
           </svg>
           {/* Background image */}
@@ -302,39 +409,87 @@ export default function ManualGrid() {
       {/* Right: Node property editor */}
       <div style={{ width: 300, borderLeft: '1px solid #ccc', padding: 16 }}>
         <h2>Node Editor</h2>
-        {editing ? (
+        {selectedNode ? (
           <div>
             <div style={{ marginBottom: 8 }}>
               <label>Name: </label>
-              <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+              <input value={selectedNode.name} onChange={e => setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, name: e.target.value } : n))} />
             </div>
             <div style={{ marginBottom: 8 }}>
               <label>Category: </label>
-              <select value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })}>
+              <select value={selectedNode.category} onChange={e => setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, category: e.target.value } : n))}>
                 {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: 8 }}>
               <label>Brightness: </label>
-              <input type="number" min={0.1} max={1.0} step={0.01} value={editing.brightness} onChange={e => setEditing({ ...editing, brightness: Number(e.target.value) })} />
+              <input type="number" min={0.1} max={1.0} step={0.01} value={selectedNode.brightness} onChange={e => setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, brightness: Number(e.target.value) } : n))} />
             </div>
             <div style={{ marginBottom: 8 }}>
               <label>Size: </label>
-              <input type="number" min={1} max={32} value={editing.size} onChange={e => setEditing({ ...editing, size: Number(e.target.value) })} />
+              <input type="number" min={1} max={32} value={selectedNode.size} onChange={e => setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, size: Number(e.target.value) } : n))} />
             </div>
             <div style={{ marginBottom: 8 }}>
               <label>Placed: </label>
-              <input type="checkbox" checked={editing.placed} onChange={e => setEditing({ ...editing, placed: e.target.checked })} />
+              <input type="checkbox" checked={selectedNode.placed} onChange={e => setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, placed: e.target.checked } : n))} />
             </div>
             <div style={{ marginBottom: 8 }}>
-              <label>Connections (comma-separated IDs): </label>
-              <input value={editing.connections.join(',')} onChange={e => setEditing({ ...editing, connections: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+              <label>Connections: </label>
+              <div style={{ position: 'relative', marginBottom: 4 }}>
+                <input
+                  type="text"
+                  placeholder="Search nodes..."
+                  value={connectionSearch}
+                  onChange={e => setConnectionSearch(e.target.value)}
+                  onFocus={() => setShowConnectionDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowConnectionDropdown(false), 150)}
+                  style={{ width: '100%', marginBottom: 4 }}
+                />
+                {showConnectionDropdown && (
+                  <div style={{ maxHeight: 120, overflowY: 'auto', background: '#fff', border: '1px solid #ccc', borderRadius: 4, position: 'absolute', width: '100%', zIndex: 10 }}>
+                    {getFilteredConnectionOptions(selectedNode, connectionSearch).length === 0 && (
+                      <div style={{ padding: 6, color: '#888' }}>No matches</div>
+                    )}
+                    {getFilteredConnectionOptions(selectedNode, connectionSearch).map(n => (
+                      <div
+                        key={n.id}
+                        style={{ padding: 6, cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                        onMouseDown={e => e.preventDefault()}
+                        onDoubleClick={() => {
+                          setNodes(nodes.map(nodeItem => nodeItem.id === selectedNode.id ? { ...nodeItem, connections: [...nodeItem.connections, n.id] } : nodeItem));
+                          setConnectionSearch('');
+                          setShowConnectionDropdown(false);
+                        }}
+                      >
+                        {n.name} {n.x != null && n.y != null ? `(${Math.round(n.x)},${Math.round(n.y)})` : ''}
+                        {n.placed && <span style={{ color: '#3bb0e0', marginLeft: 6 }}>[Placed]</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Show current connections below */}
+              <div style={{ marginTop: 4 }}>
+                {selectedNode.connections.length === 0 && <div style={{ color: '#888', fontSize: 13 }}>No connections</div>}
+                {selectedNode.connections.map(connId => {
+                  const connNode = nodes.find(n => n.id === connId);
+                  if (!connNode) return null;
+                  return (
+                    <div key={connId} style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: '#f4f4f4', borderRadius: 4, padding: '2px 6px' }}>
+                      <span style={{ flex: 1 }}>{connNode.name} {connNode.x != null && connNode.y != null ? `(${Math.round(connNode.x)},${Math.round(connNode.y)})` : ''}</span>
+                      <button
+                        style={{ marginLeft: 6, color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14 }}
+                        onClick={() => setNodes(nodes.map(nodeItem => nodeItem.id === selectedNode.id ? { ...nodeItem, connections: nodeItem.connections.filter(id => id !== connId) } : nodeItem))}
+                        title="Remove connection"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button onClick={saveEdit} style={{ marginRight: 8 }}>Save</button>
-            <button onClick={() => setEditing(null)}>Cancel</button>
           </div>
-        ) : selectedNodeId ? (
-          <div style={{ color: '#888' }}>Select "Edit" above to edit this node.</div>
         ) : (
           <div style={{ color: '#888' }}>Select a node to edit.</div>
         )}
