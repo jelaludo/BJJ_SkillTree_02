@@ -36,7 +36,9 @@ export default function ManualGrid() {
     return all.length > 0 ? all[0] : 'Default';
   });
   const [newShapeName, setNewShapeName] = useState('');
+  const [newShapeCategory, setNewShapeCategory] = useState(CATEGORIES[0]);
   const [nodes, setNodes] = useState<MasterNode[]>([]);
+  const [shapeCategory, setShapeCategory] = useState<string>(CATEGORIES[0]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState<MasterNode | null>(null);
@@ -50,16 +52,31 @@ export default function ManualGrid() {
   const [connectionSearch, setConnectionSearch] = useState('');
   const [showConnectionDropdown, setShowConnectionDropdown] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [showBackground, setShowBackground] = useState(true);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(CATEGORIES[0]);
+
+  // Calculate square grid cell size and number of columns/rows
+  const TARGET_CELLS = 20;
+  const cellSize = Math.min(canvasSize.width, canvasSize.height) / TARGET_CELLS;
+  const numCols = Math.floor(canvasSize.width / cellSize);
+  const numRows = Math.floor(canvasSize.height / cellSize);
 
   // On mount or shape change, load nodes for this shape
   useEffect(() => {
     const key = 'bjj_shape_' + shapeName;
+    const catKey = 'bjj_shape_category_' + shapeName;
     const saved = localStorage.getItem(key);
+    const savedCategory = localStorage.getItem(catKey);
+    let category = savedCategory || CATEGORIES[0];
+    setShapeCategory(category);
     if (saved) {
-      setNodes(JSON.parse(saved));
+      const loadedNodes = JSON.parse(saved);
+      // Filter nodes to only the shape's category
+      const filteredNodes = loadedNodes.filter((n: MasterNode) => n.category === category);
+      setNodes(filteredNodes);
     } else {
-      // Start with a fresh copy of masterNodes
-      setNodes(masterNodes.map(n => ({ ...n })));
+      // Start with a fresh copy of masterNodes, filtered to the shape's category
+      setNodes(masterNodes.filter(n => n.category === category).map(n => ({ ...n })));
     }
     setSelectedNodeId(null);
   }, [shapeName]);
@@ -74,8 +91,17 @@ export default function ManualGrid() {
   const allShapeNames = getAllShapeNames();
   function handleNewShape() {
     if (!newShapeName.trim()) return;
+    // Use the selected category for the new shape
+    const newNodes = masterNodes
+      .filter(n => n.category === newShapeCategory)
+      .map(n => ({ ...n }));
     setShapeName(newShapeName.trim());
+    setNodes(newNodes);
     setNewShapeName('');
+    setNewShapeCategory(CATEGORIES[0]);
+    // Store the category for this shape
+    localStorage.setItem('bjj_shape_category_' + newShapeName.trim(), newShapeCategory);
+    setShapeCategory(newShapeCategory);
   }
 
   // Filtered nodes with search
@@ -99,13 +125,15 @@ export default function ManualGrid() {
   // Add node
   function addNode() {
     if (!newNode.name.trim()) return;
-    const id = `${newNode.category.toLowerCase().slice(0,4)}-${Math.random().toString(36).slice(2,7)}`;
+    // Ensure new node matches the category of existing nodes
+    const category = nodes.length > 0 ? nodes[0].category : newNode.category;
+    const id = `${category.toLowerCase().slice(0,4)}-${Math.random().toString(36).slice(2,7)}`;
     const updatedNodes = [
       ...nodes,
       {
         id,
         name: newNode.name,
-        category: newNode.category,
+        category,
         x: null,
         y: null,
         brightness: 0.7,
@@ -115,7 +143,7 @@ export default function ManualGrid() {
       },
     ];
     setNodes(updatedNodes);
-    setNewNode({ name: '', category: CATEGORIES[0] });
+    setNewNode({ name: '', category });
   }
 
   // Remove node
@@ -191,6 +219,12 @@ export default function ManualGrid() {
     return options.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  // Helper: get current category for the shape (from state)
+  const currentCategory = shapeCategory;
+  const placedInCategory = nodes.filter(n => n.placed);
+  const unplacedInCategory = nodes.filter(n => !n.placed);
+  const totalInCategory = nodes.length;
+
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       {/* Left: Node list */}
@@ -210,7 +244,32 @@ export default function ManualGrid() {
             onChange={e => setNewShapeName(e.target.value)}
             style={{ width: 110, marginRight: 4 }}
           />
+          <select value={newShapeCategory} onChange={e => setNewShapeCategory(e.target.value)} style={{ marginRight: 4 }}>
+            {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
           <button onClick={handleNewShape} style={{ padding: '2px 10px' }}>New</button>
+          {/* New controls below */}
+          <div style={{ marginTop: 12, marginBottom: 8 }}>
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ fontWeight: 600, marginRight: 8 }}>Background:</label>
+              <input type="file" accept="image/*" onChange={handleBgUpload} />
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              <label>
+                <input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} /> Show Grid
+              </label>
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ fontWeight: 600, marginRight: 8 }}>Show Background:</label>
+              <input type="checkbox" checked={showBackground} onChange={e => setShowBackground(e.target.checked)} />
+            </div>
+            <div style={{ marginBottom: 2, color: '#3bb0e0', fontWeight: 600 }}>
+              Grid Size (px): {canvasSize.width} × {canvasSize.height}
+            </div>
+            <div style={{ color: '#3bb0e0', fontWeight: 600 }}>
+              Grid Cells: {numCols} × {numRows} (Squares)
+            </div>
+          </div>
         </div>
         <h2>Nodes</h2>
         <div style={{ marginBottom: 8 }}>
@@ -263,32 +322,41 @@ export default function ManualGrid() {
           </div>
         )}
         <h3>Unplaced Nodes</h3>
-        {/* Grouped unplaced nodes by category */}
+        {/* Grouped unplaced nodes by category (collapsible) */}
         <div>
           {groupedUnplaced.length === 0 && <div style={{ color: '#888', fontStyle: 'italic' }}>None</div>}
           {groupedUnplaced.map(group => (
             <div key={group.category} style={{ marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, color: '#3bb0e0', marginBottom: 2 }}>{group.category}</div>
-              <ul style={{ listStyle: 'none', paddingLeft: 16 }}>
-                {group.nodes.map(node => (
-                  <li
-                    key={node.id}
-                    style={{
-                      marginBottom: 4,
-                      background: selectedNodeId === node.id ? '#e6f0fa' : '#fff',
-                      borderRadius: 6,
-                      padding: 6,
-                      border: selectedNodeId === node.id ? '2px solid #3bb0e0' : '1px solid #ddd',
-                      cursor: 'pointer',
-                      color: '#222',
-                      fontWeight: selectedNodeId === node.id ? 600 : 400,
-                    }}
-                    onClick={() => setSelectedNodeId(node.id)}
-                  >
-                    {node.name}
-                  </li>
-                ))}
-              </ul>
+              <div
+                style={{ fontWeight: 600, color: '#3bb0e0', marginBottom: 2, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center' }}
+                onClick={() => setExpandedCategory(expandedCategory === group.category ? null : group.category)}
+              >
+                <span style={{ marginRight: 6 }}>{expandedCategory === group.category ? '▼' : '▶'}</span>
+                {group.category}
+                <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 13 }}>({group.nodes.length})</span>
+              </div>
+              {expandedCategory === group.category && (
+                <ul style={{ listStyle: 'none', paddingLeft: 16 }}>
+                  {group.nodes.map(node => (
+                    <li
+                      key={node.id}
+                      style={{
+                        marginBottom: 4,
+                        background: selectedNodeId === node.id ? '#e6f0fa' : '#fff',
+                        borderRadius: 6,
+                        padding: 6,
+                        border: selectedNodeId === node.id ? '2px solid #3bb0e0' : '1px solid #ddd',
+                        cursor: 'pointer',
+                        color: '#222',
+                        fontWeight: selectedNodeId === node.id ? 600 : 400,
+                      }}
+                      onClick={() => setSelectedNodeId(node.id)}
+                    >
+                      {node.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>
@@ -300,27 +368,6 @@ export default function ManualGrid() {
             <button onClick={() => togglePlaced(selectedNodeId)}>Place</button>
           </div>
         )}
-        <h3>Add Node</h3>
-        <input
-          type="text"
-          placeholder="Skill name"
-          value={newNode.name}
-          onChange={e => setNewNode({ ...newNode, name: e.target.value })}
-          style={{ width: '60%', marginRight: 8 }}
-        />
-        <select value={newNode.category} onChange={e => setNewNode({ ...newNode, category: e.target.value })}>
-          {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-        <button onClick={addNode} style={{ marginLeft: 8 }}>Add</button>
-        <div style={{ marginTop: 16 }}>
-          <label style={{ fontWeight: 600, marginRight: 8 }}>Background:</label>
-          <input type="file" accept="image/*" onChange={handleBgUpload} />
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <label>
-            <input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} /> Show Grid
-          </label>
-        </div>
       </div>
       {/* Center: Interactive grid/canvas */}
       <div style={{ flex: 1, padding: 16, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -332,12 +379,34 @@ export default function ManualGrid() {
             onClick={handleGridClick}
           >
             {/* Grid overlay */}
-            {showGrid && Array.from({ length: 20 }).map((_, i) => (
-              <g key={i}>
-                <line x1={i * canvasSize.width / 20} y1={0} x2={i * canvasSize.width / 20} y2={canvasSize.height} stroke="#444" strokeWidth={1} />
-                <line y1={i * canvasSize.height / 20} x1={0} y2={i * canvasSize.height / 20} x2={canvasSize.width} stroke="#444" strokeWidth={1} />
+            {showGrid && (
+              <g>
+                {/* Vertical lines */}
+                {Array.from({ length: numCols + 1 }).map((_, i) => (
+                  <line
+                    key={'v' + i}
+                    x1={i * cellSize}
+                    y1={0}
+                    x2={i * cellSize}
+                    y2={canvasSize.height}
+                    stroke="#444"
+                    strokeWidth={1}
+                  />
+                ))}
+                {/* Horizontal lines */}
+                {Array.from({ length: numRows + 1 }).map((_, i) => (
+                  <line
+                    key={'h' + i}
+                    y1={i * cellSize}
+                    x1={0}
+                    y2={i * cellSize}
+                    x2={canvasSize.width}
+                    stroke="#444"
+                    strokeWidth={1}
+                  />
+                ))}
               </g>
-            ))}
+            )}
             {/* Draw connection lines between placed nodes */}
             {nodes.filter(n => n.placed && n.x !== null && n.y !== null).map(node => (
               node.connections
@@ -387,7 +456,7 @@ export default function ManualGrid() {
             ))}
           </svg>
           {/* Background image */}
-          {bgImage && (
+          {bgImage && showBackground && (
             <img
               src={bgImage}
               alt="bg"
@@ -408,6 +477,26 @@ export default function ManualGrid() {
       </div>
       {/* Right: Node property editor */}
       <div style={{ width: 300, borderLeft: '1px solid #ccc', padding: 16 }}>
+        {/* Category and statistics for current category */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>
+            Category: <span style={{ color: '#3bb0e0' }}>{currentCategory}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 }}>
+            <div>
+              <span style={{ color: '#3bb0e0', fontWeight: 600, marginRight: 8 }}>{placedInCategory.length}</span>
+              Placed Nodes
+            </div>
+            <div>
+              <span style={{ color: '#ffb347', fontWeight: 600, marginRight: 8 }}>{unplacedInCategory.length}</span>
+              Unplaced Nodes
+            </div>
+            <div>
+              <span style={{ color: '#fff', fontWeight: 600, marginRight: 8 }}>{totalInCategory}</span>
+              Total Nodes
+            </div>
+          </div>
+        </div>
         <h2>Node Editor</h2>
         {selectedNode ? (
           <div>
@@ -487,6 +576,34 @@ export default function ManualGrid() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+            {/* Add Node, Background, and Toggles moved here */}
+            <div style={{ marginTop: 32, borderTop: '1px solid #ccc', paddingTop: 16 }}>
+              <h3>Add Node</h3>
+              <input
+                type="text"
+                placeholder="Skill name"
+                value={newNode.name}
+                onChange={e => setNewNode({ ...newNode, name: e.target.value })}
+                style={{ width: '60%', marginRight: 8 }}
+              />
+              <select value={newNode.category} onChange={e => setNewNode({ ...newNode, category: e.target.value })}>
+                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+              <button onClick={addNode} style={{ marginLeft: 8 }}>Add</button>
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontWeight: 600, marginRight: 8 }}>Background:</label>
+                <input type="file" accept="image/*" onChange={handleBgUpload} />
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <label>
+                  <input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} /> Show Grid
+                </label>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ fontWeight: 600, marginRight: 8 }}>Show Background:</label>
+                <input type="checkbox" checked={showBackground} onChange={e => setShowBackground(e.target.checked)} />
               </div>
             </div>
           </div>
